@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"cstdint": "c"
+		},
+		"makefile.makePath": "/Users/pauldevine/projects/openwatcomv2/rel/armo64/wmake",
+		"makefile.makefilePath": "/Users/pauldevine/projects/user_port_v9k/victor9k/src/makefile"
+	},
+	"extensions": { 
+		"recommendations": [ "ms-vscode.cpptools"]
+	}
+}

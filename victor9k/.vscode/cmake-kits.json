@@ -1,0 +1,29 @@
+[
+    { 
+    "name": "OpenWatcom v2 Beta (32-bit DOS)",
+    "compilers": {
+        "C": "/Users/pauldevine/projects/openwatcomv2/rel/armo64/wcc",
+        "CXX": "/Users/pauldevine/projects/openwatcomv2/rel/armo64/wpp"
+    },
+    "preferredGenerator": {
+        "name": "Watcom WMake"
+    },
+    "cmakeSettings": {
+        "CMAKE_SYSTEM_NAME":"DOS"
+    }
+},
+    {
+        "name": "OpenWatcom v2 Beta (16-bit DOS)",
+        "compilers": {
+            "C": "Users/pauldevine/projects/openwatcomv2/rel/armo64/wcc",
+            "CXX": "/Users/pauldevine/projects/openwatcomv2/rel/armo64/wpp"
+        },
+        "preferredGenerator": {
+            "name": "Watcom WMake"
+        },
+        "cmakeSettings": {
+            "CMAKE_SYSTEM_NAME":"DOS",
+            "CMAKE_SYSTEM_PROCESSOR": "I86"
+        }
+    }
+]

@@ -1,0 +1,175 @@
+Open Watcom Linker Version 2.0 beta Jun 18 2023 19:50:39
+Copyright (c) 2002-2023 The Open Watcom Contributors. All Rights Reserved.
+Portions Copyright (c) 1985-2002 Sybase, Inc. All Rights Reserved.
+Created on:       24/05/08 18:45:48
+Executable Image: parapsd.sys
+creating a DOS executable
+
+
+                        +------------+
+                        |   Groups   |
+                        +------------+
+
+Group                           Address              Size
+=====                           =======              ====
+
+DGROUP                          0000:0000            00003f08
+
+
+
+                        +--------------+
+                        |   Segments   |
+                        +--------------+
+
+Segment                Class          Group          Address         Size
+=======                =====          =====          =======         ====
+
+_HEADER                HEADER         DGROUP         0000:0000       00000012
+_DATA                  DATA           DGROUP         0001:0002       00000271
+CONST                  DATA           DGROUP         0028:0004       000009c2
+CONST2                 DATA           DGROUP         00c4:0006       00000002
+_TEXT                  CODE           DGROUP         00c4:0008       00001aac
+_BSS                   BSS            DGROUP         026f:0004       00001222
+_INIT                  INIT           DGROUP         0391:0006       000005f2
+
+
+                        +----------------+
+                        |   Memory Map   |
+                        +----------------+
+
+* = unreferenced symbol
++ = symbol only referenced locally
+s = symbol is static
+
+Address        Symbol
+=======        ======
+
+Module: cstrtsys.obj(/Users/pauldevine/projects/user_port_v9k/victor9k/cstrtsys.asm)
+0000:3916      _transient_data
+0000:3916      _small_code_
+Module: template.obj(/Users/pauldevine/projects/user_port_v9k/victor9k/template.c)
+0000:26f4s     _our_stack
+0000:36f4+     _dos_stack
+0000:36f8s     _currentFunction
+0000:0012+     _stack_bottom
+0000:0014      _initNeeded
+0000:0015      _my_units
+0000:001e      _my_bpb_ptr
+0000:0020+     _my_bpbtbl
+0000:0022      _my_bpbtbl_ptr
+0000:0026      _fpRequest
+0000:0c48s     close_
+0000:0c48s     open_
+0000:0c4cs     mediaCheck_
+0000:0c82s     buildBpb_
+0000:0ccfs     IOCTLInput_
+0000:0d4e+     dosError_
+0000:0d8as     readBlock_
+0000:0ed5s     writeNoVerify_
+0000:0ed9s     writeVerify_
+0000:0edcs     write_block_
+0000:0f29s     isMyUnit_
+0000:0f49      DeviceInterrupt_
+0000:0fe7      DeviceStrategy_
+0000:002as     _dispatchTable
+0000:36fa+     _my_bpb
+Module: cprint.obj(/Users/pauldevine/projects/user_port_v9k/victor9k/cprint.c)
+0000:005es     _head
+0000:0060s     _tail
+0000:0ff2*     writeBuffer_
+0000:102f*     readBuffer_
+0000:1079+     intToAscii_
+0000:10fa      calculateLinearAddress_
+0000:1112      writeToDriveLog_
+0000:1402+     set_crtc_reg_
+0000:1413+     get_crtc_reg_
+0000:1424*     set_screen_start_
+0000:1443+     set_cursor_position_
+0000:145e+     get_cursor_position_
+0000:1471+     calculate_font_cell_start_
+0000:1484+     outchr_
+0000:14b8+     outstr_
+0000:14d2+     outdec_
+0000:1506+     outhex_
+0000:1531+     outhex16_
+0000:1550+     outhex32_
+0000:1574+     cdprint_
+0000:1591*     cdprintln_
+0000:1594+     newline_
+0000:1594*     outcrlf_
+0000:15b5      cdprintf_
+0000:0062+     _logBuffer
+Module: sd.obj(/Users/pauldevine/projects/user_port_v9k/victor9k/sd.c)
+0000:167fs     check_fs_
+0000:16d4s     find_volume_
+0000:18e9      sd_initialize_
+0000:18fa*     sd_media_check_
+0000:1906      sd_read_
+0000:1926      sd_write_
+0000:0274+     _partition_offset
+0000:3708+     _local_buffer
+Module: sdmm.obj(/Users/pauldevine/projects/user_port_v9k/victor9k/sdmm.c)
+0000:0278s     _via1
+0000:027cs     _via2
+0000:0280+     _sd_card_check
+0000:0281+     _portbase
+0000:1943+     outportbyte_
+0000:1958+     inportbyte_
+0000:1962*     setportbase_
+0000:196a+     par_port_init_
+0000:1a62+     dwordlshift_
+0000:1a84*     dwordrshift_
+0000:1ac1s     xmit_mmc_
+0000:1d7es     rcvr_mmc_
+0000:1f77s     dummy_rcvr_mmc_
+0000:1fd4s     wait_ready_
+0000:200ds     deselect_
+0000:2022s     select_
+0000:2057s     rcvr_datablock_
+0000:20acs     xmit_datablock_
+0000:20fes     send_cmd_
+0000:21a1      disk_status_
+0000:21b9      disk_result_
+0000:21cf      disk_initialize_
+0000:23b9      disk_read_
+0000:2452      disk_write_
+0000:2503*     disk_ioctl_
+0000:0c46+     _bit_delay_us
+0000:0282s     _Stat
+0000:3908s     _STATUSPORT
+0000:390cs     _CONTROLPORT
+0000:3910s     _OUTPORT
+0000:3914s     _CardType
+0000:3915s     _via_initialized
+Module: devinit.obj(/Users/pauldevine/projects/user_port_v9k/victor9k/devinit.c)
+0000:3918s     _portbase
+0000:3919      _debug
+0000:391as     _partition_number
+0000:391bs     _hellomsg
+0000:394c      deviceInit_
+0000:3d26+     iseol_
+0000:3d38+     spanwhite_
+0000:3d51+     option_value_
+0000:3db5s     parse_options_
+Module: /Users/pauldevine/projects/rel/lib286/dos/clibs.lib(i4d.asm)
+0000:260a      __I4D
+0000:2653*     __U4D
+Module: /Users/pauldevine/projects/rel/lib286/dos/clibs.lib(memcpy.c)
+0000:26d7      memcpy_
+
+
+                        +--------------------+
+                        |   Libraries Used   |
+                        +--------------------+
+
+/Users/pauldevine/projects/rel/lib286/dos/clibs.lib
+
+
+                        +-----------------------+
+                        |   Linker Statistics   |
+                        +-----------------------+
+
+Stack size:  1000 (4096.)
+Memory size:  3f08 (16136.)
+Entry point address: 0000:0000
+Link time: 00:00.57

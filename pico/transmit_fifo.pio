@@ -1,0 +1,76 @@
+;
+; Copyright (c) 2024 Paul Devine
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+
+.program transmit_fifo
+
+.define public DATA_TAKEN      22
+.define public DATA_READY      26
+.define BIT_SAMPLE_DELAY       31    ; how long to pull the DATA_TAKEN line low
+.define LED_PIN                25    
+
+public entry_point:
+set pindirs, 1    ; Set the direction of pin 25 and 26 to output
+set pins, 1 [31]  ; Set pin 25 high and pin 26 high to start\
+
+.wrap_target
+    
+    ; Pull next byte from TX FIFO into `osr`
+    pull block
+
+    ; Output the byte on GPIO 6-13
+    out pins, 8
+
+    ; Pull GPIO26 low to signal Data Ready signal to Victor
+    set pins, 0b00 ; Set pin 25 low and pin 26 low
+    
+    ; Wait for falling edge on GPIO22 (Data Taken) meaning data was received
+    wait 0 GPIO DATA_TAKEN
+    wait 1 GPIO DATA_TAKEN
+
+    ; Pull GPIO26 high to reset Data Ready signal
+    set pins, 0b11  ; Set pin 25 high and pin 26 high
+
+.wrap
+
+% c-sdk {
+#include <stdio.h>
+#include <stdlib.h>
+
+static inline void transmit_fifo_init(PIO pio, uint sm, uint offset, float clk_div) {
+    printf("starting transmit_fifo_init\n");
+    uint data_pin = 6;      //8-bit output range from pico->6522 starts pin 6
+    uint data_ready = 26;   //output to 6522 to signal byte avialable on the bus
+    uint led_pin = 25;
+    uint taken_pin = 22;    //input from 6522 to indicate data read from the bus
+
+    //initialize pins I'm going to use
+    printf("initializing pins \n");
+    for (uint pin = data_pin; pin < data_pin + 8; pin++) {
+        pio_gpio_init(pio, pin);
+        gpio_set_drive_strength(pin, GPIO_DRIVE_STRENGTH_12MA);
+    }
+    pio_gpio_init(pio, led_pin);
+    pio_gpio_init(pio, data_ready);
+    pio_gpio_init(pio, taken_pin);
+    gpio_set_drive_strength(data_ready, GPIO_DRIVE_STRENGTH_12MA);\
+   
+    printf("bootstraping PIO config\n");
+    pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 8, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, taken_pin, 1, false);
+    pio_sm_config c = transmit_fifo_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, true, true, 8);
+    sm_config_set_in_pins(&c, taken_pin);
+    sm_config_set_out_pins(&c, data_pin, 8);
+    sm_config_set_set_pins(&c, data_ready, 2);
+    pio_sm_set_consecutive_pindirs(pio, sm, data_ready, 2, true);
+    
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_clkdiv(&c, clk_div);
+    pio_sm_init(pio, sm, offset + transmit_fifo_offset_entry_point, &c);
+    pio_sm_set_enabled(pio, sm, true);
+    printf("done with PIO initialize!\n");
+}
+%}

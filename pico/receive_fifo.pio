@@ -1,0 +1,61 @@
+;
+; Copyright (c) 2024 Paul Devine
+;
+; SPDX-License-Identifier: BSD-3-Clause
+;
+
+.program receive_fifo
+
+.define public DATA_TAKEN      28
+.define public DATA_READY      27
+.define BIT_SAMPLE_DELAY        5    ; how long to pull the DATA_TAKEN line low
+
+.wrap_target
+
+    ; Wait for falling edge on GPIO27 (Data Ready) meaning data is available
+    wait 0 GPIO DATA_READY
+    ; Wait for GPIO27 (Data Ready) to be pulled high by the Victor signaling end of this transaction
+    wait 1 GPIO DATA_READY
+
+    ; Read data from GPIO6-13 into `osr`    
+    in pins, 8
+
+    ; Pull GPIO28 low to indicate Data Taken
+    set pins, 0 [3]      ; Set GPIO28 low
+
+    ; Pull GPIO28 high again to reset Data Taken signal
+    set pins, 1       ; Set GPIO28 high
+.wrap
+
+% c-sdk {
+static inline void receive_fifo_init(PIO pio, uint sm, uint offset, float clk_div) {
+    uint data_pin = 14;      //8-bit input range from 6522 -> pico starts pin 6
+    uint taken_pin = 28;    //output to 6522 to signal byte received or taken = 28
+    uint data_ready = 27;   //input from 6522 to indicate data on bus
+
+    //initialize pins I'm going to use
+    for (uint pin = data_pin; pin < data_pin + 8; pin++) {
+        pio_gpio_init(pio, pin);
+    }
+    pio_gpio_init(pio, taken_pin);
+    gpio_set_dir(taken_pin, GPIO_OUT);
+    gpio_put(taken_pin, 1);
+
+    pio_gpio_init(pio, data_ready);
+    gpio_set_input_enabled(data_ready, true);  //expressly needed due to the pin being ADC see erreta RP2040-E6
+    gpio_set_dir(data_ready, GPIO_IN);
+    //gpio_pull_up(data_ready);
+    
+    pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 8, false);
+    pio_sm_set_consecutive_pindirs(pio, sm, taken_pin, 1, true);
+    pio_sm_config c = receive_fifo_program_get_default_config(offset);
+    sm_config_set_in_shift(&c, false, true, 8);
+    sm_config_set_out_pins(&c, taken_pin, 1);
+    sm_config_set_set_pins(&c, taken_pin, 1);
+    sm_config_set_in_pins(&c, data_pin);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
+    sm_config_set_clkdiv(&c, clk_div);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
