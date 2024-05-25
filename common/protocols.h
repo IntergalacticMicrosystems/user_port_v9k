@@ -1,8 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <hardware/pio.h>
-
 #ifndef _V9KPROTOCOLS_H_
 #define _V9KPROTOCOLS_H_
 typedef enum { PICO_RESET, STANDARD_RAM, DOS_INTERRUPT, BIOS_INTERRUPT,
@@ -29,20 +27,5 @@ typedef struct {
   Command *cmd;
   Data *data;
 } Payload;
-
-typedef struct {
-  PIO pio;
-  uint rx_sm;
-  uint tx_sm;
-} PIO_state;
-
-void generate_crc8_table(void);
-uint8_t crc8(const uint8_t *data, size_t len);
-bool crc8_check_command(const Command *cmd);
-bool crc8_check_data(const Data *data);
-void receive_command_payload(PIO_state *pio_state, Payload *payload);
-void receive_command(PIO_state *pio_state, Command *cmd);
-void receive_data(PIO_state *pio_state, Data *data);
-void process_incoming_commands(PIO_state *pio_state);
 
 #endif /* _V9KPROTOCOLS_H_ */

@@ -28,7 +28,7 @@ uint8_t crc8(const uint8_t *data, size_t len) {
     return crc;
 }
 
-uint8_t crc8_check(Command *cmd) {
+bool crc8_check_command(Command *cmd) {
     uint8_t crc = 0x00;  // Initial value
     crc = crc8_table[crc ^ cmd->protocol];
     crc = crc8_table[crc ^ cmd->byte_count];
@@ -43,13 +43,13 @@ uint8_t crc8_check(Command *cmd) {
     }
 }
 
-uint8_t crc8_check(Data *data) {
+bool crc8_check_data(Data *data) {
     uint8_t crc = 0x00;  // Initial value
-    crc = crc8_table[crc ^ cmd->byte_count];
-    for (size_t i = 0; i < cmd->byte_count; i++) {
-        crc = crc8_table[crc ^ cmd->buffer[i]];
+    crc = crc8_table[crc ^ data->byte_count];
+    for (size_t i = 0; i < data->byte_count; i++) {
+        crc = crc8_table[crc ^ data->buffer[i]];
     }
-    if ( cmd->expected_crc == crc) {
+    if ( data->expected_crc == crc) {
         return 0;
     } else {
         return 1;

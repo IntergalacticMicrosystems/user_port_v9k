@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
+SET(APPLE FALSE)
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
@@ -35,6 +39,11 @@ project(user_port_pico C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
+
+if (NOT TARGET no-OS-FatFS-SD-SDIO-SPI-RPi-Pico)
+  add_subdirectory(../sdio-fatfs/src build)
+endif() 
+
 
 # Add executable. Default name is the project name, version 0.1
 
@@ -68,6 +77,7 @@ target_link_libraries(
         pico_stdlib
         hardware_spi
         hardware_pio
+        no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
         )
 
 pico_add_extra_outputs(user_port_pico)

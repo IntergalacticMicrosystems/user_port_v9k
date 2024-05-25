@@ -7,6 +7,7 @@
 #include "pico/multicore.h"
 #include "receive_fifo.pio.h"
 #include "transmit_fifo.pio.h"
+#include "pico_communication.c"
 
 // Assume pio0 is the PIO instance and sm is the state machine number
 // This could be part of your main function or a dedicated function for handling PIO data
