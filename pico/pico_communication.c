@@ -10,6 +10,7 @@
 #include "transmit_fifo.pio.h"
 
 #include "../common/protocols.h"
+#include "pico_communication.h"
 
 PIO_state* init_pio(void) {
     stdio_init_all();
