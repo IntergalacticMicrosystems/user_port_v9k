@@ -10,7 +10,10 @@
 #include "transmit_fifo.pio.h"
 
 #include "../common/protocols.h"
+#include "../common/crc8.h"
 #include "pico_communication.h"
+#include "command_dispatch.h"
+#include "sd_block_device.h"
 
 PIO_state* init_pio(void) {
     stdio_init_all();
@@ -33,6 +36,17 @@ PIO_state* init_pio(void) {
     pio_state->pio = pio0;
     pio_state->rx_sm = pio_claim_unused_sm(pio_state->pio, true);
     pio_state->tx_sm = pio_claim_unused_sm(pio_state->pio, true);
+
+    if (pio_state->rx_sm == -1) {
+        printf("Error: Failed to claim a state machine for RX\n");
+        pio_state->tx_sm = -1;
+        return pio_state;;  // or handle error appropriately
+    }
+
+    if (pio_state->tx_sm == -1) {
+        printf("Error: Failed to claim a state machine for TX\n");
+        return pio_state;;  // or handle error appropriately
+    }
 
     uint tx_offset = pio_add_program(pio_state->pio, &transmit_fifo_program);
     if (tx_offset == -1) {
@@ -61,15 +75,9 @@ PIO_state* init_pio(void) {
     pio_sm_restart(pio_state->pio, pio_state->rx_sm);
 
     // clear TX state machine
-    uint tx_sm = pio_claim_unused_sm(pio_state->pio, true);
-    if (tx_sm == -1) {
-        printf("Error: Failed to claim a state machine for RX\n");
-        return 1;  // or handle error appropriately
-    }
-
-    pio_sm_set_enabled(pio_state->pio, tx_sm, false);
-    pio_sm_clear_fifos(pio_state->pio, tx_sm);
-    pio_sm_restart(pio_state->pio, tx_sm);
+    pio_sm_set_enabled(pio_state->pio, pio_state->tx_sm, false);
+    pio_sm_clear_fifos(pio_state->pio, pio_state->tx_sm);
+    pio_sm_restart(pio_state->pio, pio_state->tx_sm);
 
     //for 1 MHz signal, sample PIO at 4MHz for clarity of signal
     //float target_freq = 4.0e6;  // 4MHz in Hz
@@ -82,10 +90,10 @@ PIO_state* init_pio(void) {
     printf("pico initing PIO\n");
     receive_fifo_init(pio_state->pio, pio_state->rx_sm, rx_offset, clkdiv);
     transmit_fifo_init(pio_state->pio, pio_state->tx_sm, tx_offset, clkdiv);
-    return pio_state
+    return pio_state;
 }
 
-void process_incoming_commands(PIO_state *pio_state) {
+void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
     while (true) {
         Payload *payload = (Payload*)malloc(sizeof(Payload));
         if (payload == NULL) {
@@ -93,7 +101,7 @@ void process_incoming_commands(PIO_state *pio_state) {
             return;
         }
 
-        payload->cmd = (Command *)malloc(sizeof(Command));
+        payload->cmd = (VictorCommand *)malloc(sizeof(VictorCommand));
         if (payload->cmd == NULL) {
             printf("Error: Memory allocation failed for command\n");
             free(payload);
@@ -109,8 +117,10 @@ void process_incoming_commands(PIO_state *pio_state) {
         }
 
         receive_command_payload(pio_state, payload);
-        process_command(pio_state, *payload);
-        
+        bool success = dispatchCommand(sd_state, pio_state, payload);
+        if (!success) {
+            printf("Error: Command dispatch failed\n");
+        }
         free(payload->data->buffer);
         free(payload->data);
         free(payload->cmd->params);
@@ -122,7 +132,7 @@ void process_incoming_commands(PIO_state *pio_state) {
 void receive_command_payload(PIO_state *pio_state, Payload *payload) {
     
     receive_command(pio_state, payload->cmd);
-    while ( crc8_check(payload->cmd) ) {
+    while (crc8_check_command(payload->cmd) ) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
         receive_command(pio_state, payload->cmd);    
     }
@@ -130,15 +140,15 @@ void receive_command_payload(PIO_state *pio_state, Payload *payload) {
 
     
     receive_data(pio_state, payload->data);
-    while ( crc8_check(payload->data) ) {
+    while ( crc8_check_data(payload->data) ) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
         receive_data(pio_state, payload->data);
     }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, true);  //send a CRC success Response
 }
 
-void recieve_command(PIO_state *pio_state, Command *cmd) {
-    cmd->protocol = (protocol_type) pio_sm_get_blocking(pio_state->, pio_state->rx_sm);
+void receive_command(PIO_state *pio_state, VictorCommand *cmd) {
+    cmd->protocol = (V9KProtocol) pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     cmd->byte_count = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     cmd->command = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     cmd->params = malloc(cmd->byte_count);
@@ -166,17 +176,4 @@ void receive_data(PIO_state *pio_state, Data *data) {
         data->buffer[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     }
     data->expected_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-}
-
-int main() {
-
-    // Generate the CRC-8 lookup table
-    generate_crc8_table();
-
-    // Initialize PIO
-    PIO_state *pio_state = init_pio();
-
-    process_incoming_commands(pio_state);
-
-     return 0;
 }

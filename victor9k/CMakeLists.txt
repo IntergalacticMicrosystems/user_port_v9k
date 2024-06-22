@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-project(victor9k_project)
+project(user_port_victor9k)
 
 SET(APPLE FALSE)
 

@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
+
 #include "protocols.h"
+#include "crc8.h"
 
 #define POLYNOMIAL 0x07
 
@@ -28,7 +30,7 @@ uint8_t crc8(const uint8_t *data, size_t len) {
     return crc;
 }
 
-bool crc8_check_command(Command *cmd) {
+bool crc8_check_command(const VictorCommand *cmd) {
     uint8_t crc = 0x00;  // Initial value
     crc = crc8_table[crc ^ cmd->protocol];
     crc = crc8_table[crc ^ cmd->byte_count];
@@ -43,7 +45,7 @@ bool crc8_check_command(Command *cmd) {
     }
 }
 
-bool crc8_check_data(Data *data) {
+bool crc8_check_data(const Data *data) {
     uint8_t crc = 0x00;  // Initial value
     crc = crc8_table[crc ^ data->byte_count];
     for (size_t i = 0; i < data->byte_count; i++) {
