@@ -39,47 +39,47 @@ typedef struct {
 } RequestHeaderPayload;
 
 typedef struct {              /* BIOS Parameter block structure...   */
-    uint16_t sector_size;       /*  sector size, in   uint8_ts     */
-    uint8_t allocation_unit;    /*  allocation unit size      */
+    uint16_t bytes_per_sector;       /*  sector size, in   uint8_ts     */
+     uint8_t sectors_per_cluster;    /*  allocation unit size      */
     uint16_t reserved_sectors;  /*  number of reserved (boot) sectors  */
-    uint8_t fat_count;          /*  number of FATs on disk    */
-    uint16_t directory_size;    /*  root directory size, in files   */
+     uint8_t num_fats;          /*  number of FATs on disk    */
+    uint16_t root_entry_count;    /*  root directory size, in files   */
     uint16_t total_sectors;     /*  device size, in sectors      */
-    uint8_t media_descriptor;   /*  media descriptor code from the BIOS   */
-    uint16_t fat_sectors;       /*  number of sectors per FAT    */
-    uint16_t track_size;        /*  track size, in sectors    */
-    uint16_t head_count;        /*  number of heads        */
+     uint8_t media_descriptor;   /*  media descriptor code from the BIOS   */
+    uint16_t sectors_per_fat;       /*  number of sectors per FAT    */
+    uint16_t sectors_per_track;        /*  track size, in sectors    */
+    uint16_t num_heads;        /*  number of heads        */
     uint32_t hidden_sectors;     /*  offset of this hard disk partition */
 } BPB;
 
 typedef struct {
-    uint8_t numUnits;        /*  number of units supported by driver   */
-    BPB biosParamBlock;      /*  actual BIOS Parameter Block   */
-    uint8_t driveNumber;     /*  first available drive number */
+    uint8_t num_units;        /*  number of units supported by driver   */
+    BPB bios_param_block;      /*  actual BIOS Parameter Block   */
+    uint8_t drive_number;     /*  first available drive number */
 } InitPayload;
 
 typedef struct {
-    uint8_t mediaDescriptor;  /*  media descriptor uint8_t from BIOS */
-    uint8_t returnCode;       /*  media changed status return code   */
+    uint8_t media_descriptor;  /*  media descriptor uint8_t from BIOS */
+    uint8_t return_code;       /*  media changed status return code   */
 } MediaCheckPayload;
 
 typedef struct {
-    uint8_t mediaDescriptor;  /*  media descriptor uint8_t from BIOS */
+    uint8_t media_descriptor;  /*  media descriptor uint8_t from BIOS */
     //todo: move firstSector to command Payload
-    char *firstSector[512];   /*  the frist sector handed to us from DOS*/
-    BPB biosParamBlock;       /*  actual BIOS Parameter Block   */
+    char *first_sector[512];   /*  the frist sector handed to us from DOS*/
+    BPB bios_param_block;       /*  actual BIOS Parameter Block   */
 } BuildBpbPayload;
 
 typedef struct { 
-    int8_t mediaDescriptor;  /*  Media Descriptor    */
-    uint16_t sectorCount;    /*  Byte/Sector Count   */
-    uint16_t startSector;    /*  Starting Sector No. */
-    uint8_t volumeID;        /*  Pointer to volume id */ 
+    int8_t media_descriptor;  /*  Media Descriptor    */
+    uint16_t sector_count;    /*  Byte/Sector Count   */
+    uint16_t start_sector;    /*  Starting Sector No. */
+    uint8_t volume_id;        /*  Pointer to volume id */ 
 } ReadPayload;
 
 typedef struct {  
-    int8_t mediaDescriptor;  /*  Media Descriptor    */
-    uint16_t sectorCount;    /*  Byte/Sector Count   */
-    uint16_t startSector;    /*  Starting Sector No. */
-    uint8_t volumeID;        /*  Pointer to volume id */ 
+    int8_t media_descriptor;  /*  Media Descriptor    */
+    uint16_t sector_count;    /*  Byte/Sector Count   */
+    uint16_t start_sector;    /*  Starting Sector No. */
+    uint8_t volume_id;        /*  Pointer to volume id */ 
 } WritePayload;

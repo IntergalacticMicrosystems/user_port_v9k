@@ -37,16 +37,20 @@ endif()
 
 pico_sdk_init()
 
-project(ReadTest C CXX ASM)
+project(sd_block_device_test C CXX ASM)
 
-add_executable(ReadTest read_test.c)
+add_executable(sd_block_device_test sd_block_device_test.c)
+target_include_directories(sd_block_device_test PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../include)
+target_link_libraries(sd_block_device_test user_port_lib)
 
-add_test(ReadTest read_test.c)
-target_link_libraries(ReadTest 
+add_test(sd_block_device_test sd_block_device_test)
+
+  target_link_libraries(sd_block_device_test 
     unity
     pico_multicore
     pico_stdlib
     hardware_spi
     hardware_pio
     no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
-    user_common)
+    user_port_lib
+    user_common_lib)

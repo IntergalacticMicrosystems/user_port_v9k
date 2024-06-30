@@ -6,8 +6,10 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 SET(APPLE FALSE)
 set(CMAKE_SYSTEM_NAME Linux)
-set(CMAKE_SYSTEM_PROCESSOR arm)
 
+# Pull in Raspberry Pi Pico SDK (must be before project)
+include(pico_sdk_import.cmake)
+set(PICO_BOARD pico CACHE STRING "Board type")
 
 # Initialise pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
@@ -18,84 +20,45 @@ if(WIN32)
 else()
     set(USERHOME $ENV{HOME})
 endif()
-set(PICO_SDK_PATH ${USERHOME}/.pico-sdk/sdk/1.5.1)
-set(PICO_TOOLCHAIN_PATH ${USERHOME}/.pico-sdk/toolchain/13_2_Rel1)
+set(PICO_SDK_PATH ${USERHOME}/projects/pico-sdk)
+set(PICO_TOOLCHAIN_PATH /Applications/ArmGNUToolchain/13.2.Rel1/arm-none-eabi/bin/)
 if(WIN32)
     set(pico-sdk-tools_DIR ${USERHOME}/.pico-sdk/tools/1.5.1)
     include(${pico-sdk-tools_DIR}/pico-sdk-tools-config.cmake)
     include(${pico-sdk-tools_DIR}/pico-sdk-tools-config-version.cmake)
 endif()
 # ====================================================================================
-set(PICO_BOARD pico CACHE STRING "Board type")
 
-# Pull in Raspberry Pi Pico SDK (must be before project)
-include(pico_sdk_import.cmake)
+set(CMAKE_SYSTEM_PROCESSOR cortex-m0plus)
+set(CMAKE_C_COMPILER /Applications/ArmGNUToolchain/13.2.Rel1/arm-none-eabi/bin/arm-none-eabi-gcc --specs=nano.specs -mfloat-abi=soft -mtune=cortex-m0plus -mcpu=cortex-m0plus)
+set(CMAKE_CXX_COMPILER /Applications/ArmGNUToolchain/13.2.Rel1/arm-none-eabi/bin/arm-none-eabi-g++ --specs=nano.specs -mfloat-abi=soft -mtune=cortex-m0plus -mcpu=cortex-m0plus)
 
-if (PICO_SDK_VERSION_STRING VERSION_LESS "1.5.0")
-  message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.5.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
-endif()
+set(CMAKE_C_STANDARD_INCLUDE_DIRECTORIES 
+   /Applications/ArmGNUToolchain/13.2.Rel1/arm-none-eabi/arm-none-eabi/include
+    )
 
 project(user_port_pico C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/sdio-fatfs/src build/sdio-fatfs)
-
-# enable testing functionality
-SET(ENABLE_TESTS OFF CACHE BOOL "Enable or disable tests")
-if (${ENABLE_TESTS})
-    enable_testing()
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../Unity ${CMAKE_CURRENT_LIST_DIR}/../build/Unity)
-    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../test ${CMAKE_CURRENT_LIST_DIR}/../build/test)
+if (PICO_SDK_VERSION_STRING VERSION_LESS "1.5.0")
+  message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.5.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
 endif()
 
-  # Add executable. Default name is the project name, version 0.1
 
-  add_executable(user_port_pico user_port_pico.c )
 
-  target_sources(user_port_pico
-  PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/pico_communication.h
-    ${CMAKE_CURRENT_LIST_DIR}/pico_communication.c
-    ${CMAKE_CURRENT_LIST_DIR}/command_dispatch.h
-    ${CMAKE_CURRENT_LIST_DIR}/command_dispatch.c  
-    ${CMAKE_CURRENT_LIST_DIR}/sd_block_device.h
-    ${CMAKE_CURRENT_LIST_DIR}/sd_block_device.c
-      
-)
+# Add executable. Default name is the project name, version 0.1
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../common user_common)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/sdio-fatfs/src sdio-fatfs)
+add_subdirectory(lib)
+add_subdirectory(src)
 
-  pico_set_program_name(user_port_pico "user_port_pico")
-  pico_set_program_version(user_port_pico "0.1")
+enable_testing()
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../Unity Unity)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/test test)
 
-  # Generate PIO header
-  pico_generate_pio_header(user_port_pico ${CMAKE_CURRENT_LIST_DIR}/receive_fifo.pio)
-  pico_generate_pio_header(user_port_pico ${CMAKE_CURRENT_LIST_DIR}/transmit_fifo.pio)
 
-  # Modify the below lines to enable/disable output over UART/USB
-  pico_enable_stdio_uart(user_port_pico 1)
-  pico_enable_stdio_usb(user_port_pico 0)
-
-  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../common build/common)
-
-  # Add the standard include files to the build
-  target_include_directories(user_port_pico PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}
-    ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts or any other standard includes, if required
-  )
-
-  # Add any user requested libraries
-  target_link_libraries(
-          user_port_pico 
-          pico_multicore
-          pico_stdlib
-          hardware_spi
-          hardware_pio
-          no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
-          user_common
-          )
-
-  pico_add_extra_outputs(user_port_pico)
 
 
 

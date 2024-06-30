@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#include "../common/protocols.h"
+#include "../../common/protocols.h"
 #include "pico_common.h"
 #include "sd_block_device.h"
 

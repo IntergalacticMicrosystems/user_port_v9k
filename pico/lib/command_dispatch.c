@@ -1,5 +1,5 @@
-#include "../common/protocols.h"
-#include "../common/dos_device_payloads.h"
+#include "../../common/protocols.h"
+#include "../../common/dos_device_payloads.h"
 #include "command_dispatch.h"
 #include "sd_block_device.h"
 

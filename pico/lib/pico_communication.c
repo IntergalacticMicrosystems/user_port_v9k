@@ -9,8 +9,8 @@
 #include "receive_fifo.pio.h"
 #include "transmit_fifo.pio.h"
 
-#include "../common/protocols.h"
-#include "../common/crc8.h"
+#include "../../common/protocols.h"
+#include "../../common/crc8.h"
 #include "pico_communication.h"
 #include "command_dispatch.h"
 #include "sd_block_device.h"
@@ -132,7 +132,7 @@ void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
 void receive_command_payload(PIO_state *pio_state, Payload *payload) {
     
     receive_command(pio_state, payload->cmd);
-    while (crc8_check_command(payload->cmd) ) {
+    while (isValidCommandCrc8(payload->cmd) ) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
         receive_command(pio_state, payload->cmd);    
     }
@@ -140,7 +140,7 @@ void receive_command_payload(PIO_state *pio_state, Payload *payload) {
 
     
     receive_data(pio_state, payload->data);
-    while ( crc8_check_data(payload->data) ) {
+    while ( isValidDataCrc8(payload->data) ) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
         receive_data(pio_state, payload->data);
     }

@@ -1,6 +1,6 @@
 #ifndef SD_BLOCK_DEVICE_H
 #define SD_BLOCK_DEVICE_H
-#include "../common/protocols.h"
+#include "../../common/protocols.h"
 #include "pico_common.h"
 
 #define MAX_IMG_FILES 9

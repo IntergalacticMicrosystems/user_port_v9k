@@ -49,10 +49,6 @@ void send_to_pio_fifo(PIO pio, uint sm) {
 }
 
 int main(void) {
-    
-    // Generate the CRC-8 lookup table
-    generate_crc8_table();
-
     // Initialize PIO
     PIO_state *pio_state = init_pio();
 

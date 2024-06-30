@@ -8,11 +8,11 @@
 #include "pico/multicore.h"
 #include "receive_fifo.pio.h"
 #include "transmit_fifo.pio.h"
-#include "sdio-fatfs/include/FatFsSd_C.h"
-#include "f_util.h"
-#include "ff.h"
+#include "../sdio-fatfs/include/FatFsSd_C.h"
+#include "../sdio-fatfs/src/include/f_util.h"
+#include "../sdio-fatfs/src/ff15/source/ff.h"
 
-#include "../common/protocols.h"
+#include "../../common/protocols.h"
 #include "pico_common.h"
 #include "sd_block_device.h"
 
@@ -82,8 +82,8 @@ SDState* initializeSDState(const char *directory) {
     fr = f_open(&fil, filename, FA_OPEN_APPEND | FA_WRITE);
     if (FR_OK != fr && FR_EXIST != fr)
         panic("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
-    if (f_printf(&fil, "Hello, world!\n") < 0) {
-        printf("f_printf failed\n");
+    if (fprintf(&fil, "Hello, world!\n") < 0) {
+        printf("fprintf failed\n");
     }
 
     DIR *dir;

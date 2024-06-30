@@ -18,7 +18,7 @@ void test_sd_initialize(void) {
 // Test SD Read Success
 void test_sd_read_success(void) {
     uint8_t buffer[512];  // Assuming 512-byte sectors
-    TEST_ASSERT_EQUAL_INT(0, sd_read(0, 0, buffer, 1)); // Read 1 block from block 0
+    TEST_ASSERT_EQUAL_INT(0, sdRead(0, 0, buffer, 1)); // Read 1 block from block 0
     // Optionally, check buffer content if there's a way to know expected data
 }
 
