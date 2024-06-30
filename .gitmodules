@@ -1,6 +1,6 @@
-[submodule "Unity"]
-	path = Unity
-	url = https://github.com/ThrowTheSwitch/Unity.git
 [submodule "pico/sdio-fatfs"]
 	path = pico/sdio-fatfs
 	url = git@github.com:pauldevine/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico.git
+[submodule "test/Unity"]
+	path = test/Unity
+	url = https://github.com/ThrowTheSwitch/Unity.git
