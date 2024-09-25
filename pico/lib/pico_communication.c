@@ -15,6 +15,7 @@
 #include "command_dispatch.h"
 #include "sd_block_device.h"
 
+
 PIO_state* init_pio(void) {
     stdio_init_all();
 
@@ -31,9 +32,22 @@ PIO_state* init_pio(void) {
     sleep_ms(250);
     gpio_put(LED_PIN, 0);
     sleep_ms(10);
+
+    int p;
+    for(p = 0; p < 2; ++p) {
+
+        PIO pio = (p == 0) ? pio0 : pio1;
+        for(int s = 0; s < 2; ++s) {
+            printf("rp2.PIO(%d).state_machine(%d).pio_sm_is_claimed(): %s\n",p, s, pio_sm_is_claimed(pio, s) ? "true" : "false");
+        }
+    }
  
-    PIO_state *pio_state;
-    pio_state->pio = pio0;
+    PIO_state *pio_state = (PIO_state *)malloc(sizeof(PIO_state));
+    if (pio_state == NULL) {
+        printf("Failed to allocate memory for PIO_state\n");
+        return 1; // Exit or handle the error
+    }
+    pio_state->pio = pio1;
     pio_state->rx_sm = pio_claim_unused_sm(pio_state->pio, true);
     pio_state->tx_sm = pio_claim_unused_sm(pio_state->pio, true);
 

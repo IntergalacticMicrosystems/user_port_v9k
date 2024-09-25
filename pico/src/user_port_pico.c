@@ -6,6 +6,7 @@
 #include "hardware/pio.h"
 #include "pico/multicore.h"
 
+#include "user_port_pico.h"
 #include "receive_fifo.pio.h"
 #include "transmit_fifo.pio.h"
 #include "pico_communication.h"
@@ -49,11 +50,23 @@ void send_to_pio_fifo(PIO pio, uint sm) {
 }
 
 int main(void) {
+    stdio_init_all();
+
+    uart_init(UART_ID, 115200);  // You can adjust the baud rate here
+    gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
+    gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
+
+    // // Redirect stdout to UART
+    uart_set_hw_flow(UART_ID, false, false);
+    uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
+
+    puts("User Port Pico Initializing...");
+
     // Initialize PIO
     PIO_state *pio_state = init_pio();
 
     //Initialize the SD Card
-    const char *directory = "/disks";
+    const char *directory = "";
     SDState *sd_state = initializeSDState(directory);
 
     process_incoming_commands(sd_state, pio_state);

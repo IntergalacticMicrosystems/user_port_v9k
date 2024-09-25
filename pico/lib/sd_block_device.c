@@ -1,6 +1,8 @@
+#define __GNU_VISIBLE 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
@@ -29,16 +31,37 @@ static sd_sdio_if_t sdio_if = {
         D2_gpio = D0_gpio + 2;
         D3_gpio = D0_gpio + 3;
     */
-    .CMD_gpio = 17,
-    .D0_gpio = 18,
+    .CMD_gpio = 1,
+    .D0_gpio = 2,
     .baud_rate = 15 * 1000 * 1000  // 15 MHz
 };
 
 /* Hardware Configuration of the SD Card socket "object" */
-static sd_card_t sd_card = {
+static sd_card_t sd_card_sdio = {
     .type = SD_IF_SDIO,
     .sdio_if_p = &sdio_if
 };
+
+// /* SPI Interface */
+// static spi_t spi = {  
+//     .hw_inst = spi0,  // RP2040 SPI component
+//     .sck_gpio = 2,    // GPIO number (not Pico pin number)
+//     .mosi_gpio = 3,
+//     .miso_gpio = 4,
+//     .baud_rate = 12 * 1000 * 1000   // Actual frequency: 10416666.
+// };
+
+// /* SPI Interface */
+// static sd_spi_if_t spi_if = {
+//     .spi = &spi,  // Pointer to the SPI driving this card
+//     .ss_gpio = 5      // The SPI slave select GPIO for this SD card
+// };
+
+/* Configuration of the SD Card socket object */
+// static sd_card_t sd_card = {   
+//     .type = SD_IF_SDIO,
+//     .spi_if_p = &sd_card_sdio  // Pointer to the SPI interface driving this card
+// };
 
 
 /* Callbacks used by the library: */
@@ -48,7 +71,7 @@ size_t sd_get_num() {
 
 sd_card_t *sd_get_by_num(size_t num) {
     if (0 == num)
-        return &sd_card;
+        return &sd_card_sdio;
     else
         return NULL;
 }
@@ -58,16 +81,15 @@ int matchesPattern(const char *filename) {
     if (strlen(filename) < 8) return 0; // Minimum length for valid filenames (e.g., 0_pc.img)
 
     // Check for "X_pc" or "X_v9k" pattern where X is a digit
-    if ((strncmp(filename, "_pc", 3) == 0 || strncmp(filename, "_v9k", 4) == 0) &&
-        filename[1] >= '0' &&
-        filename[1] <= '9' &&
-        strstr(filename, ".img") != NULL) {
+    if ((strcasestr(filename, "_pc") != 0 || strcasestr(filename, "_v9k") != 0) &&
+        strcasestr(filename, ".img") != 0) {
         return 1;
     }
     return 0;
 }
 
 SDState* initializeSDState(const char *directory) {
+    printf("Initializaing SD Card...\n");
     SDState *sdState = malloc(sizeof(SDState));
     if (!sdState) {
         perror("Failed to allocate SDState");
@@ -78,34 +100,42 @@ SDState* initializeSDState(const char *directory) {
     FRESULT fr = f_mount(&fs, "", 1);
     if (FR_OK != fr) panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
     FIL fil;
-    const char* const filename = "filename.txt";
+    const char* const filename = "output.log";
     fr = f_open(&fil, filename, FA_OPEN_APPEND | FA_WRITE);
     if (FR_OK != fr && FR_EXIST != fr)
         panic("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
-    if (fprintf(&fil, "Hello, world!\n") < 0) {
+    if (f_printf(&fil, "Hello, world!\n") < 0) {
         printf("fprintf failed\n");
     }
 
-    DIR *dir;
+    printf("Mounted SD card\n");
+    DIR dir;
     struct dirent *entry;
     sdState->fileCount = 0;
 
-    if (FR_OK != (f_opendir(dir, directory))) {
+    fr = f_opendir(&dir, directory);
+    if (FR_OK != fr) {
         perror("opendir");
         free(sdState);
         return NULL;
     }
 
-    FILINFO *fno;
-    while (FR_OK == f_readdir(dir, fno) ) {
-        if (matchesPattern(fno->fname)) {
-            strncpy(sdState->imgFiles[sdState->fileCount], fno->fname, FILENAME_MAX_LENGTH - 1);
+    FILINFO fno;
+    while (FR_OK == f_readdir(&dir, &fno) ) {
+        printf("directory entry: %s\n", fno.fname);
+        if (fno.fname[0] == 0) {
+            printf("No more files\n");
+            break;
+        }
+        if (matchesPattern(fno.fname)) {
+            printf("Found matching file: %d %s\n", sdState->fileCount, fno.fname);
+            strncpy(sdState->imgFiles[sdState->fileCount], fno.fname, FILENAME_MAX_LENGTH - 1);
             sdState->imgFiles[sdState->fileCount][FILENAME_MAX_LENGTH - 1] = '\0';
             sdState->fileCount++;
             if (sdState->fileCount >= MAX_IMG_FILES) break;
         }
     }
-    f_closedir(dir);
+    f_closedir(&dir);
     return sdState;
 }
 
@@ -114,7 +144,7 @@ void freeSDState(SDState *sdState) {
 }
 
 bool initSDCard(SDState *sdState, PIO_state *pio_state, Payload *payload) {
-    const char *directory = "/path/to/sdcard";
+    const char *directory = "/";
     sdState = initializeSDState(directory);
 
     if (sdState == NULL) {
