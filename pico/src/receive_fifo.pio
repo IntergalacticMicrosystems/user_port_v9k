@@ -29,11 +29,13 @@
 
 % c-sdk {
 static inline void receive_fifo_init(PIO pio, uint sm, uint offset, float clk_div) {
+    printf("starting receive_fifo_init\n");
     uint data_pin = 14;      //8-bit input range from 6522 -> pico starts pin 6
     uint taken_pin = 28;    //output to 6522 to signal byte received or taken = 28
     uint data_ready = 27;   //input from 6522 to indicate data on bus
 
     //initialize pins I'm going to use
+    printf("initializing pins \n");
     for (uint pin = data_pin; pin < data_pin + 8; pin++) {
         pio_gpio_init(pio, pin);
     }
@@ -46,6 +48,7 @@ static inline void receive_fifo_init(PIO pio, uint sm, uint offset, float clk_di
     gpio_set_dir(data_ready, GPIO_IN);
     //gpio_pull_up(data_ready);
     
+    printf("bootstraping PIO config\n");
     pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 8, false);
     pio_sm_set_consecutive_pindirs(pio, sm, taken_pin, 1, true);
     pio_sm_config c = receive_fifo_program_get_default_config(offset);
@@ -57,5 +60,6 @@ static inline void receive_fifo_init(PIO pio, uint sm, uint offset, float clk_di
     sm_config_set_clkdiv(&c, clk_div);
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_enabled(pio, sm, true);
+    printf("done with PIO initialize!\n");
 }
 %}
