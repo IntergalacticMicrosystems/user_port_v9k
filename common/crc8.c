@@ -9,7 +9,7 @@
 uint8_t crc8_table[256];
 bool initialized = false;
 
-void generateCrc8Table() {
+void generate_crc8_table() {
     for (int i = 0; i < 256; i++) {
         uint8_t crc = i;
         for (int j = 0; j < 8; j++) {
@@ -26,7 +26,7 @@ void generateCrc8Table() {
 
 uint8_t crc8(const uint8_t *data, size_t len) {
     if (!initialized) {
-        generateCrc8Table();
+        generate_crc8_table();
     }
     uint8_t crc = 0x00;  // Initial value
     for (size_t i = 0; i < len; i++) {
@@ -35,48 +35,60 @@ uint8_t crc8(const uint8_t *data, size_t len) {
     return crc;
 }
 
-void createCommandCrc8(VictorCommand *cmd) {
+void create_command_crc8(Payload *payload) {
     if (!initialized) {
-        generateCrc8Table();
+        generate_crc8_table();
     }
     uint8_t crc = 0x00;  // Initial value
-    crc = crc8_table[crc ^ cmd->protocol];
-    crc = crc8_table[crc ^ cmd->byte_count];
-    crc = crc8_table[crc ^ cmd->command];
-    for (size_t i = 0; i < cmd->byte_count; i++) {
-        crc = crc8_table[crc ^ cmd->params[i]];
+    crc = crc8_table[crc ^ payload->protocol];
+    crc = crc8_table[crc ^ payload->params_size];
+    crc = crc8_table[crc ^ payload->command];
+    for (size_t i = 0; i < payload->params_size; i++) {
+        crc = crc8_table[crc ^ payload->params[i]];
     }
-    cmd->expected_crc = crc;
+    payload->command_crc = crc;
 }
 
-bool isValidCommandCrc8(const VictorCommand *cmd) {
-     if (!initialized) {
-        generateCrc8Table();
+void create_data_crc8(Payload *payload) {
+    if (!initialized) {
+        generate_crc8_table();
     }
     uint8_t crc = 0x00;  // Initial value
-    crc = crc8_table[crc ^ cmd->protocol];
-    crc = crc8_table[crc ^ cmd->byte_count];
-    crc = crc8_table[crc ^ cmd->command];
-    for (size_t i = 0; i < cmd->byte_count; i++) {
-        crc = crc8_table[crc ^ cmd->params[i]];
+    crc = crc8_table[crc ^ payload->data_size];
+    for (size_t i = 0; i < payload->data_size; i++) {
+        crc = crc8_table[crc ^ payload->data[i]];
     }
-    if ( cmd->expected_crc == crc) {
+    payload->data_crc = crc;
+}
+
+bool is_valid_command_crc8(const Payload *payload) {
+     if (!initialized) {
+        generate_crc8_table();
+    }
+    uint8_t crc = 0x00;  // Initial value
+    crc = crc8_table[crc ^ payload->protocol];
+    crc = crc8_table[crc ^ payload->params_size];
+    crc = crc8_table[crc ^ payload->command];
+    for (size_t i = 0; i < payload->params_size; i++) {
+        crc = crc8_table[crc ^ payload->params[i]];
+    }
+    if ( payload->command_crc == crc) {
         return true;
     } else {
         return false;
     }
 }
 
-bool isValidDataCrc8(const Data *data) {
+bool is_valid_data_crc8(const Payload *payload) {
     if (!initialized) {
-        generateCrc8Table();
+        generate_crc8_table();
     }
     uint8_t crc = 0x00;  // Initial value
-    crc = crc8_table[crc ^ data->byte_count];
-    for (size_t i = 0; i < data->byte_count; i++) {
-        crc = crc8_table[crc ^ data->buffer[i]];
+    crc = crc8_table[crc ^ payload->data_size];
+    for (size_t i = 0; i < payload->data_size; i++) {
+        crc = crc8_table[crc ^ payload->data[i]];
     }
-    if ( data->expected_crc == crc) {
+    if ( payload->data_crc == crc) {
         return true;
     } else {
         return false;

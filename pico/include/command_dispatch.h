@@ -13,7 +13,7 @@ typedef enum {
     CMD_WRITE_SD
 } SDBlockCommand;
 
-bool dispatchCommand(SDState *sdState, PIO_state *pio_state, Payload *payload);
-bool executeSDBlockCommand(SDState *sdState, PIO_state *pio_state, Payload *payload);
+Payload* dispatch_command(SDState *sdState, PIO_state *pio_state, Payload *payload);
+Payload* execute_sd_block_command(SDState *sdState, PIO_state *pio_state, Payload *payload);
 
 #endif

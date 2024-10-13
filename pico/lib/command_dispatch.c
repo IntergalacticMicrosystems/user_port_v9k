@@ -1,46 +1,56 @@
+#include <stdlib.h>
+#include <string.h>
+
 #include "../../common/protocols.h"
 #include "../../common/dos_device_payloads.h"
 #include "command_dispatch.h"
 #include "sd_block_device.h"
 
-bool dispatchCommand(SDState *sdState, PIO_state *pio_state, Payload *payload) {
-    switch (payload->cmd->protocol) {
+Payload* dispatch_command(SDState *sdState, PIO_state *pio_state, Payload *payload) {
+    switch (payload->protocol) {
         case SD_BLOCK_DEVICE:
-            return executeSDBlockCommand(sdState, pio_state, payload);
+            return execute_sd_block_command(sdState, pio_state, payload);
             break;
         default:
-            return PROTOCOL_UNKNOWN;
+            payload->status = INVALID_PROTOCOL;
+            return create_error_response(sdState, pio_state, payload);
+            break;
     }
 }
 
 // Command Dispatch
-bool executeSDBlockCommand(SDState *sdState, PIO_state *pio_state, Payload *payload) {
+Payload* execute_sd_block_command(SDState *sdState, PIO_state *pio_state, Payload *payload) {
+    Payload* response = (Payload*)malloc(sizeof(Payload));
+    memset (response, 0, sizeof(Payload));
 
-    switch (payload->cmd->command) {
+    switch (payload->command) {
         case DEVICE_INIT:
-            return initSDCard(sdState, pio_state, payload);
+            response = init_sd_card(sdState, pio_state, payload);
             break;
         case MEDIA_CHECK:
-            return mediaCheck(sdState, pio_state, payload);
+            response = media_check(sdState, pio_state, payload);
             break;
         case BUILD_BPB:
-            return buildBpb(sdState, pio_state, payload);
+            response = build_bpb(sdState, pio_state, payload);
             break;
         case IOCTL_INPUT:
-            return victor9kDriveInfo(sdState, pio_state, payload);
+            response = victor9k_drive_info(sdState, pio_state, payload);
             break;
         case READ_BLOCK:
-            return sdRead(sdState, pio_state, payload);
+            response = sd_read(sdState, pio_state, payload);
             break;
         case WRITE_NO_VERIFY:
-            return sdWrite(sdState, pio_state, payload);
+            response = sd_write(sdState, pio_state, payload);
             break;
          case WRITE_VERIFY:
-            return sdWrite(sdState, pio_state, payload);
+            response = sd_write(sdState, pio_state, payload);
             break;
         default:
-            return send_error_response(sdState, pio_state, payload);
+            payload->status = INVALID_COMMAND;
+            response = create_error_response(sdState, pio_state, payload);
             break;
     }
+
+    return response;
 }
  

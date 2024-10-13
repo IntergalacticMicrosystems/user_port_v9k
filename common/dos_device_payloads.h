@@ -1,6 +1,10 @@
+#ifndef _DOS_DEVICE_PAYLOADS_H_
+#define _DOS_DEVICE_PAYLOADS_H_
+
 #include <stdint.h>
 #include <stdbool.h>
 
+#pragma pack(push, 1)
 typedef enum {
     DEVICE_INIT,          // 0x00 Initialize
     MEDIA_CHECK,          // 0x01 Media Check
@@ -38,23 +42,66 @@ typedef struct {
     uint8_t reserved[8];  /*  reserved (unused) uint8_ts      */
 } RequestHeaderPayload;
 
-typedef struct {              /* BIOS Parameter block structure...   */
+typedef struct {                     /* Victor BIOS Parameter block structure */
     uint16_t bytes_per_sector;       /*  sector size, in   uint8_ts     */
      uint8_t sectors_per_cluster;    /*  allocation unit size      */
-    uint16_t reserved_sectors;  /*  number of reserved (boot) sectors  */
-     uint8_t num_fats;          /*  number of FATs on disk    */
-    uint16_t root_entry_count;    /*  root directory size, in files   */
-    uint16_t total_sectors;     /*  device size, in sectors      */
-     uint8_t media_descriptor;   /*  media descriptor code from the BIOS   */
-    uint16_t sectors_per_fat;       /*  number of sectors per FAT    */
-    uint16_t sectors_per_track;        /*  track size, in sectors    */
-    uint16_t num_heads;        /*  number of heads        */
-    uint32_t hidden_sectors;     /*  offset of this hard disk partition */
-} BPB;
+    uint16_t reserved_sectors;       /*  number of reserved (boot) sectors  */
+     uint8_t num_fats;               /*  number of FATs on disk    */
+    uint16_t root_entry_count;       /*  root directory size, in files   */
+    uint16_t total_sectors;          /*  device size, in sectors      */
+     uint8_t media_descriptor;       /*  media descriptor code from the BIOS   */
+    uint16_t sectors_per_fat;        /*  number of sectors per FAT    */
+    uint16_t sectors_per_track;      /*  track size, in sectors    */
+    uint16_t num_heads;              /*  number of heads        */
+    uint32_t hidden_sectors;         /*  offset of this hard disk partition */
+} VictorBPB;
+
+typedef struct {              /* FAT16 BIOS Parameter block structure */
+    uint16_t bytes_per_sector;       /* sector size, in bytes */
+    uint8_t sectors_per_cluster;     /* allocation unit size */
+    uint16_t reserved_sectors;       /* number of reserved (boot) sectors */
+    uint8_t num_fats;                /* number of FATs */
+    uint16_t root_entry_count;       /* root directory entries */
+    uint16_t total_sectors_small;    /* total sectors (if < 65536) */
+    uint8_t media_descriptor;        /* media descriptor */
+    uint16_t sectors_per_fat;        /* sectors per FAT */
+    uint16_t sectors_per_track;      /* sectors per track */
+    uint16_t num_heads;              /* number of heads */
+    uint32_t hidden_sectors;         /* hidden sectors before this partition */
+    uint32_t total_sectors_large;    /* total sectors (if >= 65536) */
+} FAT16BPB;
+
+typedef struct {
+    uint16_t num_cylinders;        /* Number of Cylinders */
+    uint8_t num_heads;             /* Number of Heads */
+    uint16_t reduced_current_cyl;  /* First Reduced-Current Cylinder */
+    uint16_t write_precomp_cyl;    /* First Write Precompensation Cylinder */
+    uint8_t ecc_burst_length;      /* ECC Data Burst Length */
+    uint8_t options;               /* Options */
+    uint8_t interleave;            /* Interleave */
+    uint8_t spares[6];             /* Spares (6 bytes) */
+} V9KHardDriveControlParameters;
+
+typedef struct {
+    uint16_t label_type;              /* Label Type */
+    uint16_t device_id;               /* Device ID */
+    uint8_t serial_number[16];        /* Serial Number */
+    uint16_t sector_size;             /* Sector Size */
+    /* IPL Vector */
+    uint32_t disk_address;            /* Disk Address */
+    uint16_t load_address;            /* Load Address */
+    uint16_t load_length;             /* Load Length */
+    uint32_t code_entry;              /* Code Entry (Segment:Offset) */
+    uint16_t primary_boot_volume;     /* Primary Boot Volume */
+    V9KHardDriveControlParameters ctrl_params;    /* Control Parameters (16 bytes) */
+    /* Variable-length fields */
+    /* Variable Lists start here */
+    uint8_t var_data[];               /* Placeholder for variable-length data */
+} V9KDiskLabel;
 
 typedef struct {
     uint8_t num_units;        /*  number of units supported by driver   */
-    BPB bios_param_block;      /*  actual BIOS Parameter Block   */
+    VictorBPB bios_param_block;      /*  actual BIOS Parameter Block   */
     uint8_t drive_number;     /*  first available drive number */
 } InitPayload;
 
@@ -67,7 +114,7 @@ typedef struct {
     uint8_t media_descriptor;  /*  media descriptor uint8_t from BIOS */
     //todo: move firstSector to command Payload
     char *first_sector[512];   /*  the frist sector handed to us from DOS*/
-    BPB bios_param_block;       /*  actual BIOS Parameter Block   */
+    VictorBPB bios_param_block;       /*  actual BIOS Parameter Block   */
 } BuildBpbPayload;
 
 typedef struct { 
@@ -83,3 +130,6 @@ typedef struct {
     uint16_t start_sector;    /*  Starting Sector No. */
     uint8_t volume_id;        /*  Pointer to volume id */ 
 } WritePayload;
+#pragma pack(pop)
+
+#endif /* _DOS_DEVICE_PAYLOADS_H_ */

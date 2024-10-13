@@ -67,7 +67,7 @@ int main(void) {
 
     //Initialize the SD Card
     const char *directory = "";
-    SDState *sd_state = initializeSDState(directory);
+    SDState *sd_state = initialize_sd_state(directory);
 
     process_incoming_commands(sd_state, pio_state);
 

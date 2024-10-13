@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
@@ -45,7 +46,7 @@ PIO_state* init_pio(void) {
     PIO_state *pio_state = (PIO_state *)malloc(sizeof(PIO_state));
     if (pio_state == NULL) {
         printf("Failed to allocate memory for PIO_state\n");
-        return 1; // Exit or handle the error
+        return pio_state; // Exit or handle the error
     }
     pio_state->pio = pio1;
     pio_state->rx_sm = pio_claim_unused_sm(pio_state->pio, true);
@@ -114,80 +115,89 @@ void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
             printf("Error: Memory allocation failed for payload\n");
             return;
         }
-
-        payload->cmd = (VictorCommand *)malloc(sizeof(VictorCommand));
-        if (payload->cmd == NULL) {
-            printf("Error: Memory allocation failed for command\n");
-            free(payload);
-            return;
-        }
-
-        payload->data = (Data *)malloc(sizeof(Data));
-        if (payload->data == NULL) {
-            printf("Error: Memory allocation failed for data\n");
-            free(payload->cmd);
-            free(payload);
-            return;
-        }
-
+        memset(payload, 0, sizeof(Payload));
         receive_command_payload(pio_state, payload);
-        bool success = dispatchCommand(sd_state, pio_state, payload);
-        if (!success) {
+        Payload *response = dispatch_command(sd_state, pio_state, payload); 
+        ResponseStatus status = transmit_response(pio_state, response);
+        if (status != STATUS_OK) {
             printf("Error: Command dispatch failed\n");
         }
-        free(payload->data->buffer);
+        free(payload->params);
         free(payload->data);
-        free(payload->cmd->params);
-        free(payload->cmd);
         free(payload);
+        free(response->params);
+        free(response->data);
+        free(response);
     }
 }
 
 void receive_command_payload(PIO_state *pio_state, Payload *payload) {
     
-    receive_command(pio_state, payload->cmd);
-    while (isValidCommandCrc8(payload->cmd) ) {
+    receive_command(pio_state, payload);
+    while (is_valid_command_crc8(payload) ) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
-        receive_command(pio_state, payload->cmd);    
+        receive_command(pio_state, payload);    
     }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, true);  //send a CRC success Response
 
     
-    receive_data(pio_state, payload->data);
-    while ( isValidDataCrc8(payload->data) ) {
+    receive_data(pio_state, payload);
+    while ( is_valid_data_crc8(payload) ) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
-        receive_data(pio_state, payload->data);
+        receive_data(pio_state, payload);
     }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, true);  //send a CRC success Response
 }
 
-void receive_command(PIO_state *pio_state, VictorCommand *cmd) {
-    cmd->protocol = (V9KProtocol) pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    cmd->byte_count = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    cmd->command = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    cmd->params = malloc(cmd->byte_count);
-    if (cmd->params == NULL) {
-        printf("Error: Memory allocation failed for cmd params\n");
+void receive_command(PIO_state *pio_state, Payload *payload) {
+    payload->protocol = (V9KProtocol) pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    payload->params_size = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    payload->command = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    payload->params = malloc(payload->params_size);
+    if (payload->params == NULL) {
+        printf("Error: Memory allocation failed for payload->params buffer\n");
         return;
     }
-    for(int i = 0; i < cmd->byte_count; ++i) {
-        cmd->params[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    for(int i = 0; i < payload->params_size; ++i) {
+        payload->params[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     }
-    cmd->expected_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    payload->command_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
 }
 
-void receive_data(PIO_state *pio_state, Data *data) {
+void receive_data(PIO_state *pio_state, Payload *payload) {
     uint8_t high_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     uint8_t low_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    data->byte_count = (high_byte << 8) | low_byte;
+    payload->data_size = (high_byte << 8) | low_byte;
     
-    data->buffer = malloc(data->byte_count);
-    if (data->buffer == NULL) {
-        printf("Error: Memory allocation failed for cmd_params buffer\n");
+    payload->data = malloc(payload->data_size);
+    if (payload->data == NULL) {
+        printf("Error: Memory allocation failed for payload->data buffer\n");
         return;
     }
-    for(int i = 0; i < data->byte_count; ++i) {
-        data->buffer[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    for(int i = 0; i < payload->data_size; ++i) {
+        payload->data[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     }
-    data->expected_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    payload->data_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+}
+
+ResponseStatus transmit_response(PIO_state *pio_state, Payload *payload) {
+    create_command_crc8(payload);
+    create_data_crc8(payload);
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->protocol);
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params_size);
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command);
+    for(int i = 0; i < payload->params_size; ++i) {
+        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params[i]);
+    }
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command_crc);
+
+    uint8_t high_byte = (payload->data_size >> 8) & 0xFF;
+    uint8_t low_byte = payload->data_size & 0xFF;
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, high_byte);
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, low_byte);
+    for(int i = 0; i < payload->data_size; ++i) {
+        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data[i]);
+    }
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data_crc);
+    return STATUS_OK;
 }
