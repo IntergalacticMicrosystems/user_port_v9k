@@ -85,7 +85,7 @@ int matches_pattern(const char *filename) {
 
     // Check for "X_pc" or "X_v9k" pattern where X is a digit
     if ((strcasestr(filename, "_pc") != 0 || strcasestr(filename, "_v9k") != 0) &&
-        strcasestr(filename, ".img") != 0) {
+        strcasestr(filename, ".img") != 0 && filename[0] != '.') {
         return 1;
     }
     return 0;

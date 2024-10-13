@@ -109,6 +109,7 @@ PIO_state* init_pio(void) {
 }
 
 void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
+    printf("Processing incoming commands\n");
     while (true) {
         Payload *payload = (Payload*)malloc(sizeof(Payload));
         if (payload == NULL) {
