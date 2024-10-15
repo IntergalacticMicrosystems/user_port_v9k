@@ -100,9 +100,8 @@ typedef struct {
 } V9KDiskLabel;
 
 typedef struct {
-    uint8_t num_units;        /*  number of units supported by driver   */
-    VictorBPB bios_param_block;      /*  actual BIOS Parameter Block   */
-    uint8_t drive_number;     /*  first available drive number */
+      uint8_t num_units;    /*  number of disk images found   */
+    VictorBPB *bpb_array;   /*  array of BIOS Parameter Blocks   */
 } InitPayload;
 
 typedef struct {

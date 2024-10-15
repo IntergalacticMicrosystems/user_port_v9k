@@ -19,6 +19,7 @@ typedef enum {
     INVALID_CRC = 7,
     FILE_NOT_FOUND = 8,
     FILE_SEEK_ERROR = 9,
+    MEMORY_ALLOCATION_ERROR = 10,
   // Additional status codes as needed
 } ResponseStatus;
 

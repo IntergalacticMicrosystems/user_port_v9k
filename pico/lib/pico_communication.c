@@ -122,7 +122,8 @@ void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
         ResponseStatus status = transmit_response(pio_state, response);
         if (status != STATUS_OK) {
             printf("Error: Command dispatch failed\n");
-        }
+        }       
+
         free(payload->params);
         free(payload->data);
         free(payload);
@@ -136,8 +137,7 @@ void receive_command_payload(PIO_state *pio_state, Payload *payload) {
     
     receive_command(pio_state, payload);
     while (is_valid_command_crc8(payload) ) {
-        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
-        receive_command(pio_state, payload);    
+        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response   
     }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, true);  //send a CRC success Response
 
@@ -145,15 +145,14 @@ void receive_command_payload(PIO_state *pio_state, Payload *payload) {
     receive_data(pio_state, payload);
     while ( is_valid_data_crc8(payload) ) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
-        receive_data(pio_state, payload);
     }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, true);  //send a CRC success Response
 }
 
-void receive_command(PIO_state *pio_state, Payload *payload) {
+void receive_command_packet(PIO_state *pio_state, Payload *payload) {
     payload->protocol = (V9KProtocol) pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    payload->params_size = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     payload->command = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    payload->params_size = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     payload->params = malloc(payload->params_size);
     if (payload->params == NULL) {
         printf("Error: Memory allocation failed for payload->params buffer\n");
@@ -185,8 +184,8 @@ ResponseStatus transmit_response(PIO_state *pio_state, Payload *payload) {
     create_command_crc8(payload);
     create_data_crc8(payload);
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->protocol);
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params_size);
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command);
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params_size);
     for(int i = 0; i < payload->params_size; ++i) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params[i]);
     }

@@ -126,11 +126,6 @@ uint16_t deviceInit( void )
         cdprintf("SD: dh_next: %x\n", dev_header->dh_next);
     }
 
-    //setting unit count to 1 to make DOS happy
-    dev_header->dh_num_drives = 1;
-    fpRequest->r_nunits = 1;
-    if (debug) cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
-
     //DOS is overloading a data structure that in normal use stores the BPB, 
     //for init() it stores the string that sits in config.sys
     //hence I'm casting to a char

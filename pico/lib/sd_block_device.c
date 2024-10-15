@@ -326,13 +326,26 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
     //determine the number of drives I'm instantiating, based on images from SD card
     uint8_t num_drives = sdState->fileCount;
 
+    //initialize the response payload
+    Payload *response = (Payload*)malloc(sizeof(Payload));
+    if (response == NULL) {
+        printf("Error: Memory allocation failed for payload\n");
+        return response;
+    }
+    memset(response, 0, sizeof(Payload));
+    response->protocol = payload->protocol;
+    response->command = payload->command;
+    response->params_size = 0;
+    response->params = NULL;
+
     //initialize the BPB table
-    VictorBPB *bpb_array = (VictorBPB *) malloc(sizeof(VictorBPB) * MAX_IMG_FILES); 
+    VictorBPB *bpb_array = (VictorBPB *)malloc(sizeof(VictorBPB) * num_drives);
     if (bpb_array == NULL) {
         printf("Memory allocation failed for bpb_array\n");
-        return false; // Handle the error appropriately
+        response->status = MEMORY_ALLOCATION_ERROR;
+        return response; // Handle the error appropriately
     }
-    memset(bpb_array, 0, sizeof(VictorBPB) * MAX_IMG_FILES);
+    memset(bpb_array, 0, sizeof(VictorBPB) * num_drives);
     
     //parse the BPB for each image file
     uint8_t i;
@@ -351,10 +364,22 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
         }
     }
 
-    //return the drive information to the Victor 9000
+    InitPayload *initPayload = (InitPayload *)malloc(sizeof(InitPayload));
+    if (initPayload == NULL) {
+        printf("Error: Memory allocation failed for initPayload\n");
+        response->status = MEMORY_ALLOCATION_ERROR;
+        return response;
+    }
 
+    //return the drive information to the Victor 9000
+    initPayload->num_units = num_drives;
+    initPayload->bpb_array = bpb_array;
+    response->data = (uint8_t *)initPayload;
+    response->data_size = 1 + (sizeof(VictorBPB) * num_drives);
+    create_command_crc8(response);
+    create_data_crc8(response);
    
-     
+    return response;
 
 }
 
@@ -428,6 +453,7 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data_size = (uint16_t) *bytesRead;
     response->data = buffer;
     response->status = STATUS_OK;
+    create_command_crc8(response);
     create_data_crc8(response);
     f_close(imgFile);
     return response;
