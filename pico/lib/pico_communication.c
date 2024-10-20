@@ -133,20 +133,23 @@ void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
     }
 }
 
+//todo: return the ResponseStatus of the command rather than void
 void receive_command_payload(PIO_state *pio_state, Payload *payload) {
     
-    receive_command(pio_state, payload);
-    while (is_valid_command_crc8(payload) ) {
-        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response   
+    receive_command_packet(pio_state, payload);
+    if (is_valid_command_crc8(payload) ) {
+        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, INVALID_CRC);  //send a CRC failure Response   
+        return;
     }
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, true);  //send a CRC success Response
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, STATUS_OK);  //send a CRC success Response
 
     
-    receive_data(pio_state, payload);
-    while ( is_valid_data_crc8(payload) ) {
-        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, false);  //send a CRC failure Response
+    receive_data_packet(pio_state, payload);
+    if ( is_valid_data_crc8(payload) ) {
+        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, INVALID_CRC);  //send a CRC failure Response
+        return;
     }
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, true);  //send a CRC success Response
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, STATUS_OK);  //send a CRC success Response
 }
 
 void receive_command_packet(PIO_state *pio_state, Payload *payload) {
@@ -164,7 +167,7 @@ void receive_command_packet(PIO_state *pio_state, Payload *payload) {
     payload->command_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
 }
 
-void receive_data(PIO_state *pio_state, Payload *payload) {
+void receive_data_packet(PIO_state *pio_state, Payload *payload) {
     uint8_t high_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     uint8_t low_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     payload->data_size = (high_byte << 8) | low_byte;
@@ -191,6 +194,12 @@ ResponseStatus transmit_response(PIO_state *pio_state, Payload *payload) {
     }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command_crc);
 
+    uint8_t crc_outcome = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    if (crc_outcome != STATUS_OK) {
+        printf("Error: CRC or other failure on command portion of payload\n");
+        return crc_outcome;
+    }
+
     uint8_t high_byte = (payload->data_size >> 8) & 0xFF;
     uint8_t low_byte = payload->data_size & 0xFF;
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, high_byte);
@@ -199,5 +208,12 @@ ResponseStatus transmit_response(PIO_state *pio_state, Payload *payload) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data[i]);
     }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data_crc);
+
+    crc_outcome = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    if (crc_outcome != STATUS_OK) {
+        printf("Error: CRC or other failure on data portion of payload\n");
+        return crc_outcome;
+    }
+
     return STATUS_OK;
 }

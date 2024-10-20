@@ -373,7 +373,10 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
 
     //return the drive information to the Victor 9000
     initPayload->num_units = num_drives;
-    initPayload->bpb_array = bpb_array;
+    memcpy(initPayload->bpb_array, bpb_array, sizeof(VictorBPB) * num_drives);
+    free(bpb_array);
+    bpb_array = NULL;
+
     response->data = (uint8_t *)initPayload;
     response->data_size = 1 + (sizeof(VictorBPB) * num_drives);
     create_command_crc8(response);

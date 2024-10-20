@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "../../common/protocols.h"
+
 #pragma pack(push, 1)
 typedef enum {
     DEVICE_INIT,          // 0x00 Initialize
@@ -101,7 +103,7 @@ typedef struct {
 
 typedef struct {
       uint8_t num_units;    /*  number of disk images found   */
-    VictorBPB *bpb_array;   /*  array of BIOS Parameter Blocks   */
+    VictorBPB bpb_array[MAX_IMG_FILES];   /*  array of BIOS Parameter Blocks   */
 } InitPayload;
 
 typedef struct {

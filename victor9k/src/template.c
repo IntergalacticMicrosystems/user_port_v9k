@@ -31,6 +31,8 @@
 #include "template.h"
 #include "cprint.h"     /* Console printing direct to hardware */
 #include "sd.h"
+#include "../../common/protocols.h"
+#include "../../common/dos_device_payloads.h"
 
 #ifdef USE_INTERNAL_STACK
 
@@ -38,11 +40,9 @@ static uint8_t our_stack[STACK_SIZE];
 uint8_t *stack_bottom = our_stack + STACK_SIZE;
 uint32_t dos_stack;
 bool initNeeded = TRUE;
-int8_t my_units[9] = {-1, -1, -1, -1, -1, -1, -1, -1, -1};
-bpb my_bpb;
-bpb near *my_bpb_ptr = &my_bpb;
-bpbtbl_t my_bpbtbl[9] = {NULL};
-bpbtbl_t far *my_bpbtbl_ptr = (bpbtbl_t far *)my_bpbtbl;
+
+InitPayload bpb_details = {0};
+
 extern bool debug;
 
 #endif // USE_INTERNAL_STACK
@@ -99,7 +99,7 @@ static uint16_t buildBpb (void)
       fpRequest->r_bpmdesc, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
       FP_SEG(fpRequest->r_bpptr), FP_OFF(fpRequest->r_bpptr), bpb_start);
   //we build the BPB during the deviceInit() method. just return pointer to built table
-  fpRequest->r_bpptr = my_bpb_ptr;
+  fpRequest->r_bpptr = &bpb_details.bpb_array;
 
 
   return S_DONE;

@@ -4,10 +4,6 @@
 #include "../../common/protocols.h"
 #include "pico_common.h"
 
-#define MAX_IMG_FILES 16
-#define FILENAME_MAX_LENGTH 260
-#define SECTOR_SIZE 512
-
 typedef struct {
     char imgFiles[MAX_IMG_FILES][FILENAME_MAX_LENGTH];
     int fileCount;

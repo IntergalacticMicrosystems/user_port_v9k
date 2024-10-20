@@ -7,6 +7,10 @@ typedef enum { PROTOCOL_UNKNOWN, PICO_RESET, SD_BLOCK_DEVICE, STANDARD_RAM, DOS_
         EXPANDED_RAM, CLOCK, PRINTER, SCSI_REQUEST, LOG_OUTPUT,
         NETWORK, FLOPPY, VGA_DISPLAY, SOUND } V9KProtocol;
 
+#define MAX_IMG_FILES 9
+#define FILENAME_MAX_LENGTH 260
+#define SECTOR_SIZE 512
+
 // Define status codes
 typedef enum {
     STATUS_OK = 0,
@@ -15,7 +19,7 @@ typedef enum {
     INVALID_PROTOCOL = 3,
     INVALID_COMMAND = 4,
     INVALID_PARAMS = 5, 
-    INVALID_DATA = 6,
+    INVALID_DATA_SIZE = 6,
     INVALID_CRC = 7,
     FILE_NOT_FOUND = 8,
     FILE_SEEK_ERROR = 9,

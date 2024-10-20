@@ -59,6 +59,11 @@ ResponseStatus initialize_user_port(void) {
 }
 
 void sendBytes(uint8_t* data, size_t length) {
+    if (viaInitialized == false) {
+        printf("VIA not initialized\n");
+        initialize_user_port();
+        return;
+    }
     //printf("sendBytesPB start\n");
     for (size_t i = 0; i < length; ++i) {
         //printf("%d: %d\n", i, data[i]);
@@ -97,6 +102,11 @@ void sendBytes(uint8_t* data, size_t length) {
 }
 
 void receiveBytes(uint8_t* data, size_t length) {
+    if (viaInitialized == false) {
+        printf("VIA not initialized\n");
+        initialize_user_port();
+        return;
+   }
    printf("receiveBytesPA start\n");
    for (size_t i = 0; i < length; ++i) {
       while ((via3->int_flag_reg & CA1_INTERRUPT_MASK) == 0) {}; // Poll CA1 for Data Ready
@@ -109,9 +119,18 @@ void receiveBytes(uint8_t* data, size_t length) {
    printf("receiveBytesPA end\n");
 }
 
+ResponseStatus send_command_payload(Payload *payload) {
+    ResponseStatus crc_outcome = send_command_packet(payload);
+    if (crc_outcome != STATUS_OK) {
+        return crc_outcome;
+    }
+    crc_outcome = send_data_packet(payload);
+    return crc_outcome;
+}
+
 ResponseStatus send_command_packet(Payload *payload) {
     sendBytes( (uint8_t *) &payload->protocol, 1);
-    sendBytes( (uint8_t *) &payload->payload, 1); 
+    sendBytes( (uint8_t *) &payload->command, 1); 
     sendBytes( (uint8_t *) &(payload->params_size), 2); 
     sendBytes( payload->params, payload->params_size);
     sendBytes( (uint8_t *) &payload->command_crc, 1);
@@ -127,47 +146,46 @@ ResponseStatus send_data_packet(Payload *payload) {
     return crc_success;
 }
 
-Payload receive_response(Payload *command) {
-    Payload *response = (Payload*)malloc(sizeof(Payload));
-    if (response == NULL) {
-        printf("Error: Memory allocation failed for response\n");
-        return MEMORY_ALLOCATION_ERROR;
-    }
+ResponseStatus receive_response(Payload *response) {
     receiveBytes( (uint8_t *) &response->protocol, 1);
     receiveBytes( (uint8_t *) &response->command, 1);
-    receiveBytes( (uint8_t *) &response->params_size, 2);
-    response->params = malloc(response->params_size);
-    if (response->params == NULL) {
-        printf("Error: Memory allocation failed for response->params buffer\n");
-        return MEMORY_ALLOCATION_ERROR;
-    }
+
+    uint8_t high_byte, low_byte;
+    uint8_t *high_byte_ptr = (uint8_t *) &high_byte;
+    uint8_t *low_byte_ptr = (uint8_t *) &low_byte;
+
+    receiveBytes( high_byte_ptr, 1);
+    receiveBytes( low_byte_ptr, 1);
+
+    response->params_size = (high_byte << 8) | low_byte;
     receiveBytes( response->params, response->params_size);
     receiveBytes( (uint8_t *) &response->command_crc, 1);
     
     if (is_valid_command_crc8(payload) ) {
-        sendBytes( (uint8_t *) true, 1);
+        sendBytes( (uint8_t *) STATUS_OK, 1);
     } else {
-        sendBytes( (uint8_t *) false, 1);
+        sendBytes( (uint8_t *) INVALID_CRC, 1);
         return INVALID_CRC
     }
 
-    receiveBytes( (uint8_t *) &response->data_size, 2);
-    response->data = malloc(response->data_size);
-    if (response->data == NULL) {
-        printf("Error: Memory allocation failed for response->data buffer\n");
-        return MEMORY_ALLOCATION_ERROR;
+    uint8_t expected_size = response->data_size;
+
+    receiveBytes( high_byte_ptr, 1);
+    receiveBytes( low_byte_ptr, 1);
+    response->data_size = (high_byte << 8) | low_byte;
+    
+    if data_size > expected_size {
+        sendBytes( (uint8_t *) INVALID_DATA_SIZE, 1);
+        return INVALID_DATA_SIZE;
     }
-    receiveBytes( response->data, response->data_size);
+
+    receiveBytes( (uint8_t *) response->data, response->data_size);
     receiveBytes( (uint8_t *) &response->data_crc, 1);
     if (is_valid_data_crc8(payload) ) {
-        sendBytes( (uint8_t *) true, 1);
+        sendBytes( (uint8_t *) STATUS_OK, 1);
     } else {
-        sendBytes( (uint8_t *) false, 1);
+        sendBytes( (uint8_t *) INVALID_CRC, 1);
         return INVALID_CRC
     }
-    return response;
-}
-
-ResponseStatus send_data_packet(Payload *payload) {
-
+    return STATUS_OK;
 }

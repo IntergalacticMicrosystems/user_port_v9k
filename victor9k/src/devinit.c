@@ -56,6 +56,9 @@
 #include "cprint.h"     /* Console printing direct to hardware */
 #include "sd.h"         /* SD card glue */
 #include "diskio.h"     /* SD card library header */
+#include "v9_communication.h"  /* Victor 9000 communication protocol */
+#include "../../common/protocols.h"
+#include "../../common/dos_device_payloads.h"
 
 #pragma data_seg("_CODE")
 bool debug = FALSE;
@@ -69,6 +72,8 @@ extern bpb my_bpb;
 extern bpb near *my_bpb_ptr;
 extern bpbtbl_t far *my_bpbtbl_ptr;
 extern bool initNeeded;
+extern bpb_details;
+
 
 /*   WARNING!!  WARNING!!  WARNING!!  WARNING!!  WARNING!!  WARNING!!   */
 /*                         */
@@ -143,18 +148,40 @@ uint16_t deviceInit( void )
     /* Try to make contact with the drive... */
     if (debug) cdprintf("SD: initializing drive r_unit: %d, partition_number: %d, my_bpb_ptr: %X\n", 
         fpRequest->r_unit, partition_number, my_bpb_ptr);
-    if (!sd_initialize(fpRequest->r_unit, partition_number, my_bpb_ptr))    {
-        cdprintf("SD: drive not connected or not powered\n");
-        printMsg(hellomsg);
-        //fpRequest->r_endaddr = MK_FP( getCS(), 0 );
-        return (S_DONE | S_ERROR | E_NOT_READY ); 
+
+    Payload initPayload = {0};
+    initPayload.protocol = SD_BLOCK_DEVICE;
+    initPayload.command = DEVICE_INIT;
+    initPayload.params_size = sizeof(fpRequest->r_bpbptr);
+    initPayload.params = (uint8_t *)(fpRequest->r_bpbptr);
+    initPayload.data_size = 1;
+    initPayload.data = 0;
+    create_command_crc8(&initPayload);
+    create_data_crc8(&initPayload);
+    ResponseStatus outcome = send_command_payload(initPayload);
+    if (outcome != STATUS_OK) {
+        printMsg("Error: Failed to send DEVICE_INIT command to SD Block Device\n");
+        printMsg(outcome);
+        printMsg("\n");
+        return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
+    initPayload.data_size = sizeof(InitPayload)
+    initPayload.data = (uint8_t*) &bpb_details; 
+    create_data_crc8(&initPayload);
+    Payload response = receive_response(initPayload);
+    if (response.status != STATUS_OK) {
+        printMsg("SD Error: Failed to receive response from SD Block Device\n");
+        printMsg(response.status);
+        printMsg("\n");
+        return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
+    }
+    
     //setting unit count to 1 to make DOS happy
-    dev_header->dh_num_drives = 1;
-    fpRequest->r_nunits = 1;         //tell DOS how many drives we're instantiating.
-    *(my_bpbtbl_ptr)[fpRequest->r_unit] = my_bpb_ptr;
-    fpRequest->r_bpbptr = my_bpbtbl_ptr;
-    bpb_ptr = my_bpb_ptr;
+    dev_header->dh_num_drives = bpb_details.num_units;
+    fpRequest->r_nunits = bpb_details.num_units;         //tell DOS how many drives we're instantiating.
+    *(my_bpbtbl_ptr)[fpRequest->r_unit] = bpb_de;
+    fpRequest->r_bpbptr = far *bpb_details.bpb_array;
+    bpb_ptr = bpb_details.bpb_array;
 
     if (debug) {
         cdprintf("SD: done parsing bpb_ptr: = %4x:%4x\n", FP_SEG(bpb_ptr), FP_OFF(bpb_ptr));
