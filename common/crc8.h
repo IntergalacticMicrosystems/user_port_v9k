@@ -6,6 +6,11 @@
 
 #include "protocols.h"
 
+#ifdef __GNUC__
+    // Code specific to GNU ARM compiler (GCC)
+    void cdprintf (char *msg, ...);
+#endif
+
 void generateCrc8Table(void);
 uint8_t crc8(const uint8_t *data, size_t len);
 void create_command_crc8(Payload *payload);

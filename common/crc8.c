@@ -6,6 +6,20 @@
 
 #define POLYNOMIAL 0x07
 
+#ifdef __WATCOMC__
+    // Code specific to OpenWatcom C compiler
+    #include "cprint.h"     /* Console printing direct to hardware */
+#endif
+
+#ifdef __GNUC__
+    #include <stdio.h>
+
+    // Code specific to GNU ARM compiler (GCC)
+    void cdprintf (char *msg, ...) {
+        printf(msg);
+    };
+#endif
+
 uint8_t crc8_table[256];
 bool initialized = false;
 
@@ -46,6 +60,7 @@ void create_command_crc8(Payload *payload) {
     for (size_t i = 0; i < payload->params_size; i++) {
         crc = crc8_table[crc ^ payload->params[i]];
     }
+    cdprintf("Command CRC: %d\n", crc);
     payload->command_crc = crc;
 }
 
@@ -58,11 +73,12 @@ void create_data_crc8(Payload *payload) {
     for (size_t i = 0; i < payload->data_size; i++) {
         crc = crc8_table[crc ^ payload->data[i]];
     }
+    cdprintf("Data CRC: %d\n", crc);
     payload->data_crc = crc;
 }
 
 bool is_valid_command_crc8(const Payload *payload) {
-     if (!initialized) {
+    if (!initialized) {
         generate_crc8_table();
     }
     uint8_t crc = 0x00;  // Initial value
@@ -72,6 +88,7 @@ bool is_valid_command_crc8(const Payload *payload) {
     for (size_t i = 0; i < payload->params_size; i++) {
         crc = crc8_table[crc ^ payload->params[i]];
     }
+    cdprintf("Command CRC payload->command_crc: %d calculated: %d\n", payload->command_crc, crc);
     if ( payload->command_crc == crc) {
         return true;
     } else {
@@ -88,6 +105,7 @@ bool is_valid_data_crc8(const Payload *payload) {
     for (size_t i = 0; i < payload->data_size; i++) {
         crc = crc8_table[crc ^ payload->data[i]];
     }
+    cdprintf("Data CRC payload->data_crc: %d calculated: %d\n", payload->data_crc, crc);
     if ( payload->data_crc == crc) {
         return true;
     } else {
