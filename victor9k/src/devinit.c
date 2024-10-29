@@ -59,6 +59,7 @@
 #include "v9_communication.h"  /* Victor 9000 communication protocol */
 #include "../../common/protocols.h"
 #include "../../common/dos_device_payloads.h"
+#include "../../common/crc8.h"
 
 #pragma data_seg("_CODE")
 bool debug = FALSE;
@@ -68,11 +69,10 @@ static uint8_t partition_number = 0;
 // Place here any variables or constants that should go away after initialization
 //
 static char hellomsg[] = "\r\nDOS Device Driver Template in Open Watcom C\r\n$";
-extern bpb my_bpb;
-extern bpb near *my_bpb_ptr;
-extern bpbtbl_t far *my_bpbtbl_ptr;
+extern int8_t num_drives;
+extern bpb my_bpbs[MAX_IMG_FILES];  // Array of BPB instances
+extern bpb far *my_bpb_tbl_ptr;     // Far pointer to bpb array
 extern bool initNeeded;
-extern bpb_details;
 
 
 /*   WARNING!!  WARNING!!  WARNING!!  WARNING!!  WARNING!!  WARNING!!   */
@@ -115,6 +115,18 @@ uint16_t deviceInit( void )
     cdprintf("     based on (C) 2014 by Dan Marks and on TU58 by Robert Armstrong\n");
     cdprintf("     with help from an openwatcom driver by Eduardo Casino\n");
 
+    cdprintf("initializing user port\n");
+    ResponseStatus status = initialize_user_port();
+    if (status != STATUS_OK) {
+        cdprintf("Error initializing VIA %d\n", status);
+        return status;
+    }
+    cdprintf("sending startup handshake\n");
+    status = send_startup_handshake();
+    if (status != STATUS_OK) {
+        cdprintf("Error sending startup handshake %d\n", status);
+        return status;
+    }
 
     //address to find passed by DOS in a combo of ES / BX get_all_registers
     if (debug) {
@@ -147,46 +159,78 @@ uint16_t deviceInit( void )
 
     /* Try to make contact with the drive... */
     if (debug) cdprintf("SD: initializing drive r_unit: %d, partition_number: %d, my_bpb_ptr: %X\n", 
-        fpRequest->r_unit, partition_number, my_bpb_ptr);
+        fpRequest->r_unit, partition_number, &my_bpbs[0]);
 
     Payload initPayload = {0};
     initPayload.protocol = SD_BLOCK_DEVICE;
     initPayload.command = DEVICE_INIT;
-    initPayload.params_size = sizeof(fpRequest->r_bpbptr);
-    initPayload.params = (uint8_t *)(fpRequest->r_bpbptr);
+    char *char_bpb = (uint8_t *) fpRequest->r_bpbptr;
+    cdprintf("sizeof char_bpb: %d\n", sizeof(char_bpb));
+    initPayload.params_size = sizeof(char_bpb);
+    initPayload.params = (uint8_t *)(char_bpb);
     initPayload.data_size = 1;
     initPayload.data = 0;
     create_command_crc8(&initPayload);
     create_data_crc8(&initPayload);
-    ResponseStatus outcome = send_command_payload(initPayload);
+    ResponseStatus outcome = send_command_payload(&initPayload);
     if (outcome != STATUS_OK) {
-        printMsg("Error: Failed to send DEVICE_INIT command to SD Block Device\n");
-        printMsg(outcome);
-        printMsg("\n");
+        cdprintf("Error: Failed to send DEVICE_INIT command to SD Block Device %d\n", outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
-    initPayload.data_size = sizeof(InitPayload)
+    InitPayload bpb_details= {0};
+    memset(&bpb_details, 0, sizeof(InitPayload));
+    initPayload.data_size = sizeof(InitPayload);
     initPayload.data = (uint8_t*) &bpb_details; 
     create_data_crc8(&initPayload);
-    Payload response = receive_response(initPayload);
-    if (response.status != STATUS_OK) {
-        printMsg("SD Error: Failed to receive response from SD Block Device\n");
-        printMsg(response.status);
-        printMsg("\n");
+    outcome = receive_response(&initPayload);
+    if (outcome != STATUS_OK) {
+        cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
     
-    //setting unit count to 1 to make DOS happy
-    dev_header->dh_num_drives = bpb_details.num_units;
-    fpRequest->r_nunits = bpb_details.num_units;         //tell DOS how many drives we're instantiating.
-    *(my_bpbtbl_ptr)[fpRequest->r_unit] = bpb_de;
-    fpRequest->r_bpbptr = far *bpb_details.bpb_array;
-    bpb_ptr = bpb_details.bpb_array;
+    //getting the response from the SD card
+    cdprintf("command sent success, starting receive response\n");
+    Payload responsePayload = {0};
+    outcome = receive_response(&responsePayload);
+    if (outcome != STATUS_OK) {
+        cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
+        cdprintf((char *) outcome);
+        cdprintf("\n");
+        return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
+    }
+
+    //parsing the response
+    cdprintf("received response, parsing data\n");
+    InitPayload *init_details= (InitPayload *) &responsePayload.data[0];
+    cdprintf("SD: receiving response\n");
+
+    cdprintf("SD: received response, parsing data\n");
+    cdprintf("SD: num_drives: %d\n", init_details->num_units);
+    bpb far *my_bpb_ptr = (bpb far *) &init_details->bpb_array[0];
+
+    dev_header->dh_num_drives = init_details->num_units;
+    fpRequest->r_nunits = init_details->num_units;         //tell DOS how many drives we're instantiating.
+    num_drives = init_details->num_units;
+
+    //copy the BPB details to the BPB table
+    for (int i = 0; i < bpb_details.num_units; i++) {
+        VictorBPB newBpb = bpb_details.bpb_array[i];
+        my_bpbs[i].bpb_nbyte = newBpb.bytes_per_sector;  //copy the BPB details to
+        my_bpbs[i].bpb_nsector = newBpb.sectors_per_cluster;  //the BPB table   
+        my_bpbs[i].bpb_nreserved = newBpb.reserved_sectors;
+        my_bpbs[i].bpb_nfat = newBpb.num_fats;
+        my_bpbs[i].bpb_ndirent = newBpb.root_entry_count;
+        my_bpbs[i].bpb_nsize = newBpb.total_sectors;
+        my_bpbs[i].bpb_mdesc = newBpb.media_descriptor;
+        my_bpbs[i].bpb_nfsect = newBpb.sectors_per_fat;
+    }
+    
+    fpRequest->r_bpbptr = my_bpb_tbl_ptr;
 
     if (debug) {
         cdprintf("SD: done parsing bpb_ptr: = %4x:%4x\n", FP_SEG(bpb_ptr), FP_OFF(bpb_ptr));
         cdprintf("SD: done parsing my_bpb_ptr = %4x:%4x\n", FP_SEG(my_bpb_ptr), FP_OFF(my_bpb_ptr));
-        cdprintf("SD: done parsing my_bpbtbl_ptr = %4x:%4x\n", FP_SEG(my_bpbtbl_ptr), FP_OFF(my_bpbtbl_ptr));
+        cdprintf("SD: done parsing my_bpbtbl_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_ptr), FP_OFF(my_bpb_tbl_ptr));
         cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(0));
         cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
         cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
@@ -205,8 +249,7 @@ uint16_t deviceInit( void )
     // /* All is well.  Tell DOS how many units and the BPBs... */
     uint8_t i;
     for (i=0; i < fpRequest->r_nunits; i++) {
-        if (debug) {cdprintf("SD:  my_units[%d]: %d drive %c\n",i, i, (fpRequest->r_firstunit + 'A'));}
-        my_units[i] = i;
+        if (debug) {cdprintf("SD:  my_drives: %d drive %c\n", i, (fpRequest->r_firstunit + 'A'));}
     }
     initNeeded = false;
 

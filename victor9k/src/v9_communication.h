@@ -1,4 +1,4 @@
-#include "../common/protocols.h"
+#include "../../common/protocols.h"
 
 #ifndef _USER_PORT_H
 #define _USER_PORT_H
@@ -53,15 +53,16 @@
 #define SR_INTERRUPT_MASK      0x04  // Bit to enable SR interrupts in int_enable_reg
 
 //Constants for overall 6522 interactions
-#define CA1_INTERRUPT_MASK     0x02  // Bit to enable CB1 interrupts in int_enable_reg
-#define CA2_INTERRUPT_MASK     0x01  // Bit to enable CB2 interrupts in int_enable_reg
+#define CA1_INTERRUPT_MASK     0x02  // Bit to enable CA1 interrupts in int_enable_reg
+#define CA2_INTERRUPT_MASK     0x01  // Bit to enable CA2 interrupts in int_enable_reg
 #define CB1_INTERRUPT_MASK     0x10  // Bit to enable CB1 interrupts in int_enable_reg
-#define CB2_INTERRUPT_MASK     0x08  // Bit to enable CB2 interrupts in int_enable_reg
+#define CB2_INTERRUPT_MASK     0x04  // Bit to enable CB2 interrupts in int_enable_reg
 #define CA1_CB1_BOTH_INTERRUPT 0x12  // Bit pattern to enable both CA1 and CB1 interrupts for handshake
 #define INTERRUPT_ENABLE       0x80  // Bit in the int_enable_reg to turn on interrupts 
 #define VIA_CLEAR_INTERRUPTS   0x7F  // Bit pattern to clear entire interrupt register
-#define VIA_RESET_AUX_CTL      0x03  // Resets T1/T2/SR disabled, PA/PB enabled
-#define MAX_POLLING_ITERATIONS 1000  // Maximum number of iterations to poll for interrupt
+#define VIA_RESET_AUX_CTL      0x03  // Resets T1/T2/SR disabled, PA/PB latching enabled
+#define MAX_POLLING_ITERATIONS 5000  // Maximum number of iterations to poll for interrupt
+#define MAX_HANDSHAKE_ATTEMPTS 100   // Maximum number of handshake attempts before timeout
 
 enum ports {PARALLEL, SERIAL_A, SERIAL_B, USER_PORT};
 
@@ -107,11 +108,15 @@ static void delay_us(unsigned int n);
 
 #pragma pack( pop )
 
-ResponseStatus initialize_6522(void);
-void sendBytes(uint8_t* data, size_t length);
-void receiveBytes(uint8_t* data, size_t length)
+ResponseStatus initialize_user_port(void);
+void interrupt far userPortISR(void);
+ResponseStatus send_startup_handshake(void);
+ResponseStatus send_uint16_t(uint16_t data);
+ResponseStatus sendBytes(uint8_t* data, size_t length);
+ResponseStatus receiveBytes(uint8_t* data, size_t length);
+ResponseStatus send_command_payload(Payload *payload);
 ResponseStatus send_command(Payload *command);
-ResponseStatus receive_response(Payload *command, Payload *response);
+ResponseStatus receive_response(Payload *response);
 ResponseStatus send_command_packet(Payload *payload);
 ResponseStatus send_data_packet(Payload *payload);
 

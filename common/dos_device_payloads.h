@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "../../common/protocols.h"
+#include "protocols.h"
 
 #pragma pack(push, 1)
 typedef enum {
@@ -102,7 +102,7 @@ typedef struct {
 } V9KDiskLabel;
 
 typedef struct {
-      uint8_t num_units;    /*  number of disk images found   */
+    uint8_t num_units;    /*  number of disk images found   */
     VictorBPB bpb_array[MAX_IMG_FILES];   /*  array of BIOS Parameter Blocks   */
 } InitPayload;
 

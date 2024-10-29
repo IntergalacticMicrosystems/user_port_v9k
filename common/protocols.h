@@ -3,13 +3,30 @@
 
 #ifndef _V9KPROTOCOLS_H_
 #define _V9KPROTOCOLS_H_
-typedef enum { PROTOCOL_UNKNOWN, PICO_RESET, SD_BLOCK_DEVICE, STANDARD_RAM, DOS_INTERRUPT, BIOS_INTERRUPT,
-        EXPANDED_RAM, CLOCK, PRINTER, SCSI_REQUEST, LOG_OUTPUT,
-        NETWORK, FLOPPY, VGA_DISPLAY, SOUND } V9KProtocol;
+typedef enum { 
+    PROTOCOL_UNKNOWN = 0, 
+    PICO_RESET = 1, 
+    SD_BLOCK_DEVICE = 2, 
+    STANDARD_RAM = 3, 
+    DOS_INTERRUPT = 4, 
+    BIOS_INTERRUPT = 5,
+    EXPANDED_RAM = 6, 
+    CLOCK = 7, 
+    PRINTER = 8, 
+    SCSI_REQUEST = 9, 
+    LOG_OUTPUT = 10,
+    NETWORK = 11,
+    FLOPPY = 12, 
+    VGA_DISPLAY = 13, 
+    SOUND = 14, 
+    HANDSHAKE =15 
+  } V9KProtocol;
 
 #define MAX_IMG_FILES 9
 #define FILENAME_MAX_LENGTH 260
 #define SECTOR_SIZE 512
+#define STARTUP_HANDSHAKE 0x0F  // Handshake byte to start communication ASCII SI  (shift in)
+#define HANDSHAKE_RESPONSE 0x0E // Handshake byte to acknowledge communication ASCII SO (shift out)
 
 // Define status codes
 typedef enum {
@@ -24,6 +41,7 @@ typedef enum {
     FILE_NOT_FOUND = 8,
     FILE_SEEK_ERROR = 9,
     MEMORY_ALLOCATION_ERROR = 10,
+    PORT_NOT_INITIALIZED = 11,
   // Additional status codes as needed
 } ResponseStatus;
 
