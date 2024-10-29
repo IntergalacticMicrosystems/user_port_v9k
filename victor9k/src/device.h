@@ -389,7 +389,7 @@ typedef struct {
 
 typedef boot super;             /* Alias for boot structure             */
 
-typedef bpb *near bpbtbl_t[];     /*  Array of BPBs     */
+typedef bpb * near bpb_ptr;    /*  Pointer to a BPB    */
 
 typedef struct {
   uint8_t r_length;               /*  Request Header length               */
@@ -401,7 +401,7 @@ typedef struct {
     struct {
       uint8_t _r_nunits;          /*  number of units     */
       int8_t __far *_r_endaddr;   /*  Ending Address      */
-      bpb *__far * _r_bpbptr;     /*  ptr to BPB array    */
+      bpb far * _r_bpbptr;     /*  ptr to BPB array    */
       uint8_t _r_firstunit;
     } _r_init;
     struct {

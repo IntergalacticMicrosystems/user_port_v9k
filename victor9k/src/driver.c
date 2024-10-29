@@ -481,10 +481,3 @@ bool parse_options (char far *p)
   }
   return TRUE;
 }
-
-int main(void)
-{
-  
-  return 0;
-}
-
