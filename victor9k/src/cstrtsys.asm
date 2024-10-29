@@ -42,7 +42,7 @@ ATTR_CONIN      equ     00001h
 ; Device name and attributes. Modify according to your needs
 ;
 
-DEVICE_NAME     equ     'PARAPSD'
+DEVICE_NAME     equ     'USERPORT'
 DEVICE_ATTR     equ     ATTR_BLDFAT or ATTR_GENIOCTL or ATTR_IOCTL or ATTR_QRYIOCTL
 
 ; End of user modifiable part

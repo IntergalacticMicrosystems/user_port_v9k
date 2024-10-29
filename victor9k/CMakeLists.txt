@@ -6,7 +6,7 @@ SET(APPLE FALSE)
 
 # Custom target to invoke wmake
 add_custom_command(
-    OUTPUT "src/parapsd.sys"
+    OUTPUT "src/userport.sys"
     COMMAND ${CMAKE_SOURCE_DIR}/compile.sh
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Building Victor 9000 driver using wmake"
