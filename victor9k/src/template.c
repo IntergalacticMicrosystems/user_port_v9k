@@ -40,9 +40,9 @@ static uint8_t our_stack[STACK_SIZE];
 uint8_t *stack_bottom = our_stack + STACK_SIZE;
 uint32_t dos_stack;
 bool initNeeded = TRUE;
-
-InitPayload bpb_details = {0};
-
+int8_t num_drives = -1;
+bpb my_bpbs[MAX_IMG_FILES] = {0};            // Array of BPB instances
+bpb far *my_bpb_tbl_ptr = &my_bpbs[0];    // Far pointer to the BPB table
 extern bool debug;
 
 #endif // USE_INTERNAL_STACK
@@ -99,8 +99,7 @@ static uint16_t buildBpb (void)
       fpRequest->r_bpmdesc, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
       FP_SEG(fpRequest->r_bpptr), FP_OFF(fpRequest->r_bpptr), bpb_start);
   //we build the BPB during the deviceInit() method. just return pointer to built table
-  fpRequest->r_bpptr = &bpb_details.bpb_array;
-
+  fpRequest->r_bpptr = my_bpb_tbl_ptr;
 
   return S_DONE;
 }
@@ -270,15 +269,11 @@ static uint16_t writeVerify () {
 }
 
 static bool isMyUnit(int8_t unitCode) {
-  for (int i = 0; i < sizeof(my_units); ++i) {
-    if (my_units[i] == -1) {
-      break;  // End of valid unit codes in the array
-    }
-    if (my_units[i] == unitCode) {
-      return true;  // This unit code is for my driver
-    }
+  if (unitCode <= num_drives) {
+    return true;
+  } else {
+    return false;
   }
-  return false;  // This unit code is not for my driver
 }
 
 static driverFunction_t dispatchTable[] =

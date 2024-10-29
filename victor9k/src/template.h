@@ -60,7 +60,6 @@ struct ALL_REGS {
 extern uint8_t *stack_bottom;
 extern uint32_t dos_stack;
 extern bool debug, initNeeded;
-extern int8_t my_units[9];
 extern request __far *fpRequest;
 extern struct device_header far *dev_header;
 
