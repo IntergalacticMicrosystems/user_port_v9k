@@ -94,12 +94,12 @@ ResponseStatus sendBytes(uint8_t* data, size_t length) {
         initialize_user_port();
     }
     //cdprintf("sendBytesPB start\n");
+    int iteration;
     for (size_t i = 0; i < length; ++i) {
-        cdprintf("i: %d: value: %d\n", i, data[i]);
+        //cdprintf("i: %d: value: %d\n", i, data[i]);
         
         via3->out_in_reg_b = data[i]; // Send data byte
         // Wait for ACK on CB2periph_ctrl_reg
-        int iteration;
         for (iteration = 0; iteration < MAX_POLLING_ITERATIONS; iteration++) {
             if (via3->int_flag_reg & CB1_INTERRUPT_MASK) {
                 // Data Taken signal detected
@@ -111,7 +111,7 @@ ResponseStatus sendBytes(uint8_t* data, size_t length) {
             return TIMEOUT;
         }
     }
-    cdprintf("sendBytesPB end\n");
+    //cdprintf("sendBytesPB end\n");
     return STATUS_OK;
 }
 
@@ -187,7 +187,7 @@ ResponseStatus send_uint16_t(uint16_t data) {
     uint8_t data_array[2];
     data_array[0] = (data >> 8) & 0xFF;  //high_byte
     data_array[1] = data & 0xFF;         //low_byte;
-    sendBytes( (uint8_t *) data_array, 2); 
+    sendBytes( (uint8_t *) &data_array[0], 2); 
     return STATUS_OK;
 }
 
