@@ -45,26 +45,26 @@ static sd_card_t sd_card_sdio = {
     .sdio_if_p = &sdio_if
 };
 
-// /* SPI Interface */
-// static spi_t spi = {  
-//     .hw_inst = spi0,  // RP2040 SPI component
-//     .sck_gpio = 2,    // GPIO number (not Pico pin number)
-//     .mosi_gpio = 3,
-//     .miso_gpio = 4,
-//     .baud_rate = 12 * 1000 * 1000   // Actual frequency: 10416666.
-// };
+/* SPI Interface */
+ static spi_t spi = {  
+     .hw_inst = spi0,  // RP2040 SPI component
+     .sck_gpio = 2,    // GPIO number (not Pico pin number)
+     .mosi_gpio = 3,
+     .miso_gpio = 4,
+     .baud_rate = 12 * 1000 * 1000    // Actual frequency: 10416666.
+ };
 
-// /* SPI Interface */
-// static sd_spi_if_t spi_if = {
-//     .spi = &spi,  // Pointer to the SPI driving this card
-//     .ss_gpio = 5      // The SPI slave select GPIO for this SD card
-// };
+ /* SPI Interface */
+ static sd_spi_if_t spi_if = {
+     .spi = &spi,  // Pointer to the SPI driving this card
+     .ss_gpio = 5       // The SPI slave select GPIO for this SD card
+ };
 
 /* Configuration of the SD Card socket object */
-// static sd_card_t sd_card = {   
-//     .type = SD_IF_SDIO,
-//     .spi_if_p = &sd_card_sdio  // Pointer to the SPI interface driving this card
-// };
+ static sd_card_t sd_card = {   
+     .type = SD_IF_SPI,
+     .spi_if_p = &spi_if   // Pointer to the SPI interface driving this card
+ };
 
 
 /* Callbacks used by the library: */
@@ -74,10 +74,11 @@ size_t sd_get_num() {
 
 sd_card_t *sd_get_by_num(size_t num) {
     if (0 == num)
-        return &sd_card_sdio;
+        return &sd_card;
     else
         return NULL;
 }
+
 
 // Function to check if a file matches the given pattern
 int matches_pattern(const char *filename) {
@@ -92,27 +93,18 @@ int matches_pattern(const char *filename) {
 }
 
 /* Function to parse the BPB from a FAT16 .img file */
-int parse_fat16_bpb(const char *img_filename, VictorBPB *bpb) {
-    FILE *img_file;
+int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
+
     uint8_t boot_sector[512]; /* Boot sector is typically 512 bytes */
     size_t bytes_read;
 
-    /* Open the .img file in binary read mode */
-    img_file = fopen(img_filename, "rb");
-    if (!img_file) {
-        perror("Error opening image file");
-        return -1;
-    }
-
     /* Read the first 512 bytes (boot sector) */
-    bytes_read = fread(boot_sector, 1, sizeof(boot_sector), img_file);
+    FRESULT fr = f_read(img_file, boot_sector, sizeof(boot_sector), &bytes_read);
     if (bytes_read != sizeof(boot_sector)) {
         perror("Error reading boot sector");
-        fclose(img_file);
+        f_close(img_file);
         return -1;
     }
-
-    fclose(img_file);
 
     /* Parse the BPB fields from the boot sector */
     bpb->bytes_per_sector     = boot_sector[11] | (boot_sector[12] << 8);
@@ -129,25 +121,6 @@ int parse_fat16_bpb(const char *img_filename, VictorBPB *bpb) {
                                (boot_sector[29] << 8) |
                                (boot_sector[30] << 16) |
                                (boot_sector[31] << 24);
-
-    /* Handle total sectors for larger volumes */
-    if (bpb->total_sectors == 0) {
-        uint32_t large_total_sectors = boot_sector[32] |
-                                      (boot_sector[33] << 8) |
-                                      (boot_sector[34] << 16) |
-                                      (boot_sector[35] << 24);
-
-        /* For the Victor 9000 BPB, you may need to adjust the structure
-           to include 'uint32_t large_total_sectors;' if necessary. */
-        if (large_total_sectors > 0xFFFF) {
-            /* Volume is larger than can be represented in 16 bits */
-            /* Handle accordingly, possibly adjust your BPB structure */
-            /* For now, we can set total_sectors to 0xFFFF as a placeholder */
-            bpb->total_sectors = 0xFFFF;
-        } else {
-            bpb->total_sectors = (uint16_t)large_total_sectors;
-        }
-    }
 
     return 0; /* Success */
 }
@@ -169,8 +142,8 @@ uint8_t* find_v9k_virtual_volume_list(V9KDiskLabel* dlbl) {
     return &wml[wml_size * 8 + 1];
 }
 
-int parse_victor9000_disk_label(const char *img_filename, VictorBPB *bpb) {
-    FILE *img_file;
+int parse_victor9000_disk_label(FIL *img_file, VictorBPB *bpb) {
+    
     uint8_t sector0[1024]; /* Read more than one sector if necessary */
     size_t bytes_read;
     V9KDiskLabel *dlbl = NULL;
@@ -184,22 +157,13 @@ int parse_victor9000_disk_label(const char *img_filename, VictorBPB *bpb) {
     uint16_t num_heads = 0;
     int i;
 
-    /* Open the disk image file */
-    img_file = fopen(img_filename, "rb");
-    if (!img_file) {
-        perror("Error opening disk image file");
-        return -1;
-    }
-
     /* Read enough data to cover the disk label and variable-length fields */
-    bytes_read = fread(sector0, 1, sizeof(sector0), img_file);
+    FRESULT fr = f_read(img_file, sector0, sizeof(sector0), &bytes_read);
     if (bytes_read < sizeof(V9KDiskLabel)) {
         perror("Error reading disk label");
-        fclose(img_file);
+        f_close(img_file);
         return -1;
     }
-
-    fclose(img_file);
 
     /* Map sector0 to the DiskLabel structure */
     dlbl = (V9KDiskLabel *)sector0;
@@ -261,15 +225,25 @@ SDState* initialize_sd_state(const char *directory) {
         return NULL;
     }
 
-    FATFS fs;
-    FRESULT fr = f_mount(&fs, "", 1);
+    sdState->fs = malloc(sizeof(FATFS));
+    if (!sdState->fs) {
+        perror("Failed to allocate FATFS");
+        free(sdState);
+        return NULL;
+    }
+    FRESULT fr = f_mount(sdState->fs, "", 1);
     if (FR_OK != fr) panic("f_mount error: %s (%d)\n", FRESULT_str(fr), fr);
-    FIL fil;
+
     const char* const filename = "output.log";
-    fr = f_open(&fil, filename, FA_OPEN_APPEND | FA_WRITE);
+    sdState->debug_log = malloc(sizeof(FIL));
+    if (!sdState->debug_log) {
+        perror("Failed to allocate FIL for debug_log");
+        // Handle cleanup and error
+    }
+    fr = f_open(sdState->debug_log, filename, FA_OPEN_APPEND | FA_WRITE);
     if (FR_OK != fr && FR_EXIST != fr)
         panic("f_open(%s) error: %s (%d)\n", filename, FRESULT_str(fr), fr);
-    if (f_printf(&fil, "Hello, world!\n") < 0) {
+    if (f_printf(sdState->debug_log, "Hello, world!\n") < 0) {
         printf("fprintf failed\n");
     }
 
@@ -286,6 +260,7 @@ SDState* initialize_sd_state(const char *directory) {
     }
 
     FILINFO fno;
+    sdState->fileCount = 0;
     while (FR_OK == f_readdir(&dir, &fno) ) {
         printf("directory entry: %s\n", fno.fname);
         if (fno.fname[0] == 0 || sdState->fileCount >= MAX_IMG_FILES) {
@@ -294,10 +269,18 @@ SDState* initialize_sd_state(const char *directory) {
         }
         if (matches_pattern(fno.fname)) {
             printf("Found matching file: %d %s\n", sdState->fileCount, fno.fname);
-            strncpy(sdState->imgFiles[sdState->fileCount], fno.fname, FILENAME_MAX_LENGTH - 1);
-            sdState->imgFiles[sdState->fileCount][FILENAME_MAX_LENGTH - 1] = '\0';
+            strncpy(sdState->file_names[sdState->fileCount], fno.fname, FILENAME_MAX_LENGTH - 1);
+            sdState->file_names[sdState->fileCount][FILENAME_MAX_LENGTH - 1] = '\0';
+            sdState->img_file[sdState->fileCount] = malloc(sizeof(FIL));
+            if (!sdState->img_file[sdState->fileCount]) {
+                perror("Failed to allocate FIL");
+                // Handle cleanup and error
+            }
+            FRESULT fr = f_open(sdState->img_file[sdState->fileCount], fno.fname, FA_OPEN_EXISTING | FA_READ | FA_WRITE);
+            if (FR_OK != fr) {
+                printf("error opening file, %s", fno.fname);
+            }
             sdState->fileCount++;
-            if (sdState->fileCount >= MAX_IMG_FILES) break;
         }
     }
     f_closedir(&dir);
@@ -305,12 +288,18 @@ SDState* initialize_sd_state(const char *directory) {
 
     // Loop through and print each string
     for (int i = 0; i < sdState->fileCount; ++i) {
-        printf("sdState->imgFiles: %s\n", sdState->imgFiles[i]);
+        printf("sdState->file_names[%s]: \n", sdState->file_names[i]);
     }
     return sdState;
 }
 
 void freeSDState(SDState *sdState) {
+    for (int i = 0; i < sdState->fileCount; i++) {
+        f_close(sdState->img_file[i]);
+    }
+    f_close(sdState->debug_log);
+    f_unmount("");
+    free(sdState->fs);
     free(sdState);
 }
 
@@ -320,7 +309,7 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
 
     printf("Found %d matching files:\n", sdState->fileCount);
     for (int i = 0; i < sdState->fileCount; i++) {
-        printf("%s\n", sdState->imgFiles[i]);
+        printf("%s\n", sdState->file_names[i]);
     }
        
     //determine the number of drives I'm instantiating, based on images from SD card
@@ -335,50 +324,48 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
     memset(response, 0, sizeof(Payload));
     response->protocol = payload->protocol;
     response->command = payload->command;
-    response->params_size = 0;
-    response->params = NULL;
-
-    //initialize the BPB table
-    VictorBPB *bpb_array = (VictorBPB *)malloc(sizeof(VictorBPB) * num_drives);
-    if (bpb_array == NULL) {
-        printf("Memory allocation failed for bpb_array\n");
-        response->status = MEMORY_ALLOCATION_ERROR;
-        return response; // Handle the error appropriately
+    response->params_size = 1;
+    response->params = (uint8_t *)malloc(1);
+    if (response->params == NULL) {
+        printf("Error: Memory allocation failed for response->params\n");
+        return response;
     }
-    memset(bpb_array, 0, sizeof(VictorBPB) * num_drives);
-    
-    //parse the BPB for each image file
-    uint8_t i;
-    for (i = 0; i < num_drives; i++) {
-        printf("Parsing BPB for %s\n", sdState->imgFiles[i]);
-        if (strcasestr(sdState->imgFiles[i], "_v9k") != 0) {
-            if (parse_victor9000_disk_label(sdState->imgFiles[i], &bpb_array[i]) != 0) {
-                printf("Error parsing BPB for %s\n", sdState->imgFiles[i]);
-                return false;
-            }
-        } else {
-            if (parse_fat16_bpb(sdState->imgFiles[i], &bpb_array[i]) != 0) {
-                printf("Error parsing BPB for %s\n", sdState->imgFiles[i]);
-                return false;
-            }
-        }
-    }
+    response->params[0] = 0;
 
+    //InitPayload is a struct that contains the number of drives and an array of BPBs
+    //for DOS INIT call. Don't confuse with the protocol Payload which is the wire format
     InitPayload *initPayload = (InitPayload *)malloc(sizeof(InitPayload));
     if (initPayload == NULL) {
         printf("Error: Memory allocation failed for initPayload\n");
         response->status = MEMORY_ALLOCATION_ERROR;
         return response;
     }
+    memset(initPayload, 0, sizeof(InitPayload));
+
+    initPayload->num_units = num_drives;
+    
+    //parse the BPB for each image file
+    uint8_t i;
+    for (i = 0; i < num_drives; i++) {
+        printf("Parsing BPB for %s\n", sdState->file_names[i]);
+        if (strcasestr(sdState->file_names[i], "_v9k") != 0) {
+            if (parse_victor9000_disk_label(sdState->img_file[i], &initPayload->bpb_array[i]) != 0) {
+                printf("Error parsing BPB for %s\n", sdState->file_names[i]);
+                return false;
+            }
+        } else {
+            if (parse_fat16_bpb(sdState->img_file[i], &initPayload->bpb_array[i]) != 0) {
+                printf("Error parsing BPB for %s\n", sdState->file_names[i]);
+                return false;
+            }
+        }
+    }
+
+    
 
     //return the drive information to the Victor 9000
-    initPayload->num_units = num_drives;
-    memcpy(initPayload->bpb_array, bpb_array, sizeof(VictorBPB) * num_drives);
-    free(bpb_array);
-    bpb_array = NULL;
-
     response->data = (uint8_t *)initPayload;
-    response->data_size = 1 + (sizeof(VictorBPB) * num_drives);
+    response->data_size = (sizeof(InitPayload));
     create_command_crc8(response);
     create_data_crc8(response);
    
@@ -412,17 +399,8 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     create_command_crc8(response);
     create_data_crc8(response);
 
-    //todo fix so driveNumber is pulled from payload
+    //TODO fix so driveNumber is pulled from payload
     int driveNumber = 0;
-    char *imgFilePath = sdState->imgFiles[driveNumber];
-
-    FIL *imgFile;
-    FRESULT result = f_open(imgFile, imgFilePath, FA_READ | FA_WRITE | FA_OPEN_EXISTING);
-    if (imgFile == NULL) {
-        perror("Failed to open image file");
-        response->status = FILE_NOT_FOUND;
-        return response;
-    }
 
     // Calculate the offset in the .img file
     //tod fix so startSector is pulled from payload
@@ -430,9 +408,9 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     long offset = startSector * SECTOR_SIZE;
 
     // Move to the calculated offset
-    if (FR_OK != f_lseek(imgFile, offset)) {
+    if (FR_OK != f_lseek(sdState->img_file[driveNumber], offset)) {
         perror("Failed to seek to offset");
-        f_close(imgFile);
+        f_close(sdState->img_file[driveNumber]);
         response->status = FILE_SEEK_ERROR;
         return response;
     }
@@ -446,10 +424,10 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     //todo fix so buffer size is determined form payload
     char *buffer = (char *)malloc(bytesToRead);
     size_t *bytesRead;
-    result = f_read(imgFile, buffer, bytesToRead, bytesRead);
+    FRESULT result = f_read(sdState->img_file[driveNumber], buffer, bytesToRead, bytesRead);
     if (FR_OK != result) {
         perror("Failed to read the expected number of bytes");
-        f_close(imgFile);
+        f_close(sdState->img_file[driveNumber]);
         response->status = FILE_SEEK_ERROR;
         return response;
     }
@@ -458,7 +436,7 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->status = STATUS_OK;
     create_command_crc8(response);
     create_data_crc8(response);
-    f_close(imgFile);
+    
     return response;
 }
 

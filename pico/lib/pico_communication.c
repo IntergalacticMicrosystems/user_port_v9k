@@ -31,8 +31,26 @@ PIO_state* init_pio(void) {
     sleep_ms(250);
     gpio_put(LED_PIN, 1);
     sleep_ms(250);
-    gpio_put(LED_PIN, 0);
-    sleep_ms(10);
+    gpio_put(LED_PIN, 1);
+
+    const uint RX_DATA_READY = 27;
+    gpio_init(RX_DATA_READY);
+    gpio_set_dir(RX_DATA_READY, GPIO_IN);
+
+    const uint RX_TAKEN_PIN = 28;
+    gpio_init(RX_TAKEN_PIN);
+    gpio_set_dir(RX_TAKEN_PIN, GPIO_OUT);
+    gpio_put(RX_TAKEN_PIN, 1);
+
+    const uint TX_DATA_READY = 26;
+    gpio_init(TX_DATA_READY);
+    gpio_set_dir(TX_DATA_READY, GPIO_OUT);
+    gpio_put(TX_DATA_READY, 1);
+    gpio_set_function(TX_DATA_READY, GPIO_FUNC_PIO1);
+
+    const uint TX_DATA_TAKEN = 22;
+    gpio_init(TX_DATA_TAKEN);
+    gpio_set_dir(TX_DATA_TAKEN, GPIO_IN);
 
     int p;
     for(p = 0; p < 2; ++p) {
@@ -75,15 +93,6 @@ PIO_state* init_pio(void) {
         return pio_state;
     }
 
-    const uint RX_DATA_READY = 22;
-    gpio_init(RX_DATA_READY);
-    gpio_set_dir(RX_DATA_READY, GPIO_IN);
-
-    const uint RX_TAKEN_PIN = 28;
-    gpio_init(RX_TAKEN_PIN);
-    gpio_set_dir(RX_TAKEN_PIN, GPIO_OUT);
-    gpio_put(RX_TAKEN_PIN, 1);
-
     // clear RX state machine
     pio_sm_set_enabled(pio_state->pio, pio_state->rx_sm, false);
     pio_sm_clear_fifos(pio_state->pio, pio_state->rx_sm);
@@ -108,6 +117,27 @@ PIO_state* init_pio(void) {
     return pio_state;
 }
 
+void wait_for_startup_handshake(PIO_state *pio_state) {
+    printf("Waiting for startup handshake\n");
+    while (true) {
+        uint8_t handshake = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+        printf("Received byte %d\n", handshake);
+        if (handshake == STARTUP_HANDSHAKE) {
+            printf("Startup handshake received\n");
+            pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, HANDSHAKE_RESPONSE);
+            printf("Sent handshake response\n");
+            // Handshake is considered complete
+            break;
+
+        } else {
+                printf("Bad handshake response received: %d\n", handshake);
+                wait_for_startup_handshake(pio_state);
+                break;
+            }
+        }
+    printf("Startup handshake completed\n");
+}
+
 void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
     printf("Processing incoming commands\n");
     while (true) {
@@ -117,13 +147,20 @@ void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
             return;
         }
         memset(payload, 0, sizeof(Payload));
-        receive_command_payload(pio_state, payload);
+        ResponseStatus outcome = receive_command_payload(pio_state, payload);
+        if (outcome != STATUS_OK) {
+            printf("Error: Command payload reception failed %d\n", outcome);
+            free(payload->params);
+            free(payload->data);
+            free(payload);
+            continue;
+        }
         Payload *response = dispatch_command(sd_state, pio_state, payload); 
         ResponseStatus status = transmit_response(pio_state, response);
         if (status != STATUS_OK) {
             printf("Error: Command dispatch failed\n");
         }       
-
+        printf("Receive command Payload successfully\n");
         free(payload->params);
         free(payload->data);
         free(payload);
@@ -133,87 +170,143 @@ void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
     }
 }
 
-//todo: return the ResponseStatus of the command rather than void
-void receive_command_payload(PIO_state *pio_state, Payload *payload) {
-    
-    receive_command_packet(pio_state, payload);
-    if (is_valid_command_crc8(payload) ) {
-        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, INVALID_CRC);  //send a CRC failure Response   
-        return;
-    }
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, STATUS_OK);  //send a CRC success Response
-
-    
-    receive_data_packet(pio_state, payload);
-    if ( is_valid_data_crc8(payload) ) {
-        pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, INVALID_CRC);  //send a CRC failure Response
-        return;
-    }
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, STATUS_OK);  //send a CRC success Response
+uint16_t receive_utf16(PIO_state *pio_state) {
+    uint8_t high_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    uint8_t low_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);   
+    return (high_byte << 8) | low_byte;
 }
 
-void receive_command_packet(PIO_state *pio_state, Payload *payload) {
+ResponseStatus receive_command_payload(PIO_state *pio_state, Payload *payload) {
+
+    printf("Waiting for incoming command\n");
+    ResponseStatus outcome = receive_command_packet(pio_state, payload);
+    if (outcome != STATUS_OK) {
+        printf("Error: Command packet reception failed %d\n", outcome);
+        return outcome;  
+    } 
+    printf("Valid CRC on command packet, receiving data packet\n");
+    outcome = receive_data_packet(pio_state, payload);
+    if (outcome != STATUS_OK) {
+        printf("Error: Data packet reception failed %d\n", outcome);
+        return outcome;
+    }
+    printf("Valid CRC on data packet\n");
+    printf("Command payload received successfully\n");
+    return outcome;
+}
+
+
+ResponseStatus receive_command_packet(PIO_state *pio_state, Payload *payload) {
+    printf("Waiting for command packet\n");
     payload->protocol = (V9KProtocol) pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    payload->command = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    payload->params_size = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    if (payload->protocol == HANDSHAKE) {
+        printf("Handshake protocol received instead of command_packet, retrying\n");
+        for (int i = 0; i < 3; ++i) {
+            payload->protocol = (V9KProtocol) pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+            if (payload->protocol != HANDSHAKE) {
+                break;
+            }
+        }
+    }
+    payload->command = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm); 
+    payload->params_size = receive_utf16(pio_state);
     payload->params = malloc(payload->params_size);
     if (payload->params == NULL) {
         printf("Error: Memory allocation failed for payload->params buffer\n");
-        return;
+        sendResponseStatus(pio_state, MEMORY_ALLOCATION_ERROR);
+        return MEMORY_ALLOCATION_ERROR;
     }
+    printf("Protocol: %d, Command: %d\n", payload->protocol, payload->command);
+    printf("Recieving command parameters, size: %d\n", payload->params_size);
     for(int i = 0; i < payload->params_size; ++i) {
         payload->params[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     }
     payload->command_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    printf("Done getting command packet %d\n", payload->command_crc);
+    if ( !is_valid_command_crc8(payload) ) {
+        sendResponseStatus(pio_state, INVALID_CRC);  //send a CRC failure Response   
+        printf("Invalid CRC on command packet\n");
+        return INVALID_CRC;
+    }
+    printf("Valid CRC on command packet\n");
+    sendResponseStatus(pio_state, STATUS_OK);  //send a CRC success Response
+    return STATUS_OK;
 }
 
-void receive_data_packet(PIO_state *pio_state, Payload *payload) {
-    uint8_t high_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    uint8_t low_byte = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    payload->data_size = (high_byte << 8) | low_byte;
-    
+ResponseStatus receive_data_packet(PIO_state *pio_state, Payload *payload) {
+    printf("Waiting for data packet\n");
+    payload->data_size = receive_utf16(pio_state);
+    printf("Data size: %d\n", payload->data_size);
     payload->data = malloc(payload->data_size);
     if (payload->data == NULL) {
         printf("Error: Memory allocation failed for payload->data buffer\n");
-        return;
+        sendResponseStatus(pio_state, MEMORY_ALLOCATION_ERROR);
+        return MEMORY_ALLOCATION_ERROR;
     }
+    printf("Receiving data buffer\n");
     for(int i = 0; i < payload->data_size; ++i) {
         payload->data[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     }
+    printf("Receiving data buffer completed\n");
     payload->data_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
+    printf("Received CRC, Done getting data packet\n");
+    if ( !is_valid_data_crc8(payload) ) {
+        sendResponseStatus(pio_state, INVALID_CRC);  //send a CRC failure Response
+        printf("Invalid CRC on data packet\n");
+        return INVALID_CRC;
+    }
+    printf("Valid CRC on data packet\n");
+    sendResponseStatus(pio_state, STATUS_OK);  //send a CRC success Response
+    return STATUS_OK;
+}
+
+void transmit_utf16(PIO_state *pio_state, uint16_t value) {
+    uint8_t high_byte = (value >> 8) & 0xFF;
+    uint8_t low_byte = value & 0xFF;
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, high_byte);
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, low_byte);
+}
+
+void sendResponseStatus(PIO_state *pio_state, ResponseStatus status) {
+    uint8_t status_value = (uint8_t)status;  // Cast enum to uint8_t
+    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, status_value);
 }
 
 ResponseStatus transmit_response(PIO_state *pio_state, Payload *payload) {
+    printf("Transmitting response\n");
     create_command_crc8(payload);
     create_data_crc8(payload);
+    printf("Transmitting protocol: %d and command: %d\n", payload->protocol, payload->command);
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->protocol);
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command);
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params_size);
+    transmit_utf16(pio_state, payload->params_size);
+    printf("Transmitting command parameters, size: %d\n", payload->params_size);
     for(int i = 0; i < payload->params_size; ++i) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params[i]);
     }
+    printf("Transmitting command CRC\n");
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command_crc);
-
+    printf("Waiting for CRC value\n");
     uint8_t crc_outcome = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     if (crc_outcome != STATUS_OK) {
         printf("Error: CRC or other failure on command portion of payload\n");
         return crc_outcome;
     }
-
-    uint8_t high_byte = (payload->data_size >> 8) & 0xFF;
-    uint8_t low_byte = payload->data_size & 0xFF;
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, high_byte);
-    pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, low_byte);
+    printf("Transmitting data packet\n");
+    transmit_utf16(pio_state, payload->data_size);
+    printf("Transmitting data buffer\n");
     for(int i = 0; i < payload->data_size; ++i) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data[i]);
     }
+    printf("transmitting data CRC\n");
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data_crc);
 
+    printf("Waiting for CRC value\n");
     crc_outcome = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     if (crc_outcome != STATUS_OK) {
         printf("Error: CRC or other failure on data portion of payload\n");
         return crc_outcome;
     }
-
+    printf("Response transmitted successfully\n");
     return STATUS_OK;
 }

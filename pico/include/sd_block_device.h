@@ -3,10 +3,14 @@
 
 #include "../../common/protocols.h"
 #include "pico_common.h"
+#include "../sdio-fatfs/src/ff15/source/ff.h"
 
 typedef struct {
-    char imgFiles[MAX_IMG_FILES][FILENAME_MAX_LENGTH];
+    char file_names[MAX_IMG_FILES][FILENAME_MAX_LENGTH];
     int fileCount;
+    FATFS *fs;
+    FIL *img_file[MAX_IMG_FILES];
+    FIL *debug_log;
 } SDState;
 
 SDState* initialize_sd_state(const char *directory);

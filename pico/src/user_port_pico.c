@@ -61,7 +61,6 @@ int main(void) {
     uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
 
     puts("User Port Pico Initializing...");
-
     // Initialize PIO
     PIO_state *pio_state = init_pio();
 
@@ -69,6 +68,7 @@ int main(void) {
     const char *directory = "";
     SDState *sd_state = initialize_sd_state(directory);
 
+    wait_for_startup_handshake(pio_state);
     process_incoming_commands(sd_state, pio_state);
 
     return 0;

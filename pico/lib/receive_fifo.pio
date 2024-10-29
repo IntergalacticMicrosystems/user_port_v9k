@@ -19,6 +19,7 @@
 
     ; Read data from GPIO6-13 into `osr`    
     in pins, 8
+    push
 
     ; Pull GPIO28 low to indicate Data Taken
     set pins, 0 [3]      ; Set GPIO28 low
@@ -48,18 +49,18 @@ static inline void receive_fifo_init(PIO pio, uint sm, uint offset, float clk_di
     gpio_set_dir(data_ready, GPIO_IN);
     //gpio_pull_up(data_ready);
     
-    printf("bootstraping PIO config\n");
+    printf("bootstraping RX PIO config\n");
     pio_sm_set_consecutive_pindirs(pio, sm, data_pin, 8, false);
     pio_sm_set_consecutive_pindirs(pio, sm, taken_pin, 1, true);
     pio_sm_config c = receive_fifo_program_get_default_config(offset);
-    sm_config_set_in_shift(&c, false, true, 8);
     sm_config_set_out_pins(&c, taken_pin, 1);
     sm_config_set_set_pins(&c, taken_pin, 1);
     sm_config_set_in_pins(&c, data_pin);
+    sm_config_set_in_shift(&c, false, false, 8);
     sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
     sm_config_set_clkdiv(&c, clk_div);
     pio_sm_init(pio, sm, offset, &c);
     pio_sm_set_enabled(pio, sm, true);
-    printf("done with PIO initialize!\n");
+    printf("done with RX PIO initialize!\n");
 }
 %}
