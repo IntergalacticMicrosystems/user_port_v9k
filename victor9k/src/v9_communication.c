@@ -19,10 +19,10 @@ static bool viaInitialized = false;
 
 static void (__interrupt __far *originalISR)();
 
-static volatile V9kParallelPort far *via1 = MK_FP(PHASE2_DEVICE_SEGMENT,
-      VIA1_REG_OFFSET);
-static volatile V9kParallelPort far *via2 = MK_FP(PHASE2_DEVICE_SEGMENT,
-      VIA2_REG_OFFSET);
+// static volatile V9kParallelPort far *via1 = MK_FP(PHASE2_DEVICE_SEGMENT,
+//       VIA1_REG_OFFSET);
+// static volatile V9kParallelPort far *via2 = MK_FP(PHASE2_DEVICE_SEGMENT,
+//       VIA2_REG_OFFSET);
 static volatile V9kParallelPort far *via3 = MK_FP(PHASE2_DEVICE_SEGMENT,
       VIA3_REG_OFFSET);
 static volatile uint8_t far *pic = MK_FP(INTEL_DEV_SEGMENT, PIC_8259_OFFSET);
@@ -88,18 +88,36 @@ ResponseStatus initialize_user_port(void) {
     return STATUS_OK;
 }
 
+//sends a byte array to the user port without waiting for DATA_TAKEN signal to
+//be set before sending the next byte
+ResponseStatus burstBytes(uint8_t* data, size_t length) {
+    if (viaInitialized == false) {
+        cdprintf("VIA not initialized\n");
+        initialize_user_port();
+    }
+    cdprintf("burstBytes start\n");
+    
+    for (size_t i = 0; i < length; ++i) {
+        via3->out_in_reg_b = data[i]; // Send data byte
+    }
+    cdprintf("burstBytes end\n");
+    return STATUS_OK;
+}
+
+//sends a byte array to the user port, waiting for DATA_TAKEN signal to 
+//be set before sending the next byte
 ResponseStatus sendBytes(uint8_t* data, size_t length) {
     if (viaInitialized == false) {
         cdprintf("VIA not initialized\n");
         initialize_user_port();
     }
     //cdprintf("sendBytesPB start\n");
-    int iteration;
+    int iteration = 0;
     for (size_t i = 0; i < length; ++i) {
         //cdprintf("i: %d: value: %d\n", i, data[i]);
         
         via3->out_in_reg_b = data[i]; // Send data byte
-        // Wait for ACK on CB2periph_ctrl_reg
+        //Wait for ACK on CB2periph_ctrl_reg
         for (iteration = 0; iteration < MAX_POLLING_ITERATIONS; iteration++) {
             if (via3->int_flag_reg & CB1_INTERRUPT_MASK) {
                 // Data Taken signal detected
@@ -220,7 +238,7 @@ ResponseStatus send_command_packet(Payload *payload) {
     cdprintf("params_size: %d\n", payload->params_size);
     send_uint16_t(payload->params_size);  //send the size of the params
     cdprintf("sending params\n");
-    sendBytes( payload->params, payload->params_size);  //send the actual params
+    burstBytes( payload->params, payload->params_size);  //send the actual params
     sendBytes( (uint8_t *) &payload->command_crc, 1);
 
     ResponseStatus crc_success = via3->out_in_reg_a;
@@ -232,7 +250,7 @@ ResponseStatus send_data_packet(Payload *payload) {
     cdprintf("data_size: %d\n", payload->data_size);
     send_uint16_t(payload->data_size);  //send the size of the data
     cdprintf("sending data\n");
-    sendBytes( payload->data, payload->data_size);  //send the actual data
+    burstBytes( payload->data, payload->data_size);  //send the actual data
     cdprintf("sending data_crc\n");
     sendBytes( (uint8_t *) &payload->data_crc, 1);
     ResponseStatus crc_success = via3->out_in_reg_a;

@@ -54,7 +54,6 @@
 #include "devinit.h"
 #include "template.h"
 #include "cprint.h"     /* Console printing direct to hardware */
-#include "sd.h"         /* SD card glue */
 #include "diskio.h"     /* SD card library header */
 #include "v9_communication.h"  /* Victor 9000 communication protocol */
 #include "../../common/protocols.h"
@@ -68,7 +67,7 @@ static uint8_t partition_number = 0;
 //
 // Place here any variables or constants that should go away after initialization
 //
-static char hellomsg[] = "\r\nDOS Device Driver Template in Open Watcom C\r\n$";
+//static char hellomsg[] = "\r\nDOS Device Driver Template in Open Watcom C\r\n$";
 extern int8_t num_drives;
 extern bpb my_bpbs[MAX_IMG_FILES];  // Array of BPB instances
 extern bpb far *my_bpb_tbl_ptr;     // Far pointer to bpb array
@@ -98,12 +97,7 @@ extern bool initNeeded;
 uint16_t deviceInit( void )
 {
     struct ALL_REGS registers;
-    uint16_t offset;
-    uint16_t brkadr, reboot[2];  
-    void (__interrupt far *reboot_address)();  /* Reboot vector */
-    bpb my_bpb;
-    bpb far *bpb_ptr;
-    char far *bpb_cast_ptr;
+
     
 
     get_all_registers(&registers);
@@ -146,7 +140,8 @@ uint16_t deviceInit( void )
     //DOS is overloading a data structure that in normal use stores the BPB, 
     //for init() it stores the string that sits in config.sys
     //hence I'm casting to a char
-    bpb_cast_ptr = (char __far *)(fpRequest->r_bpbptr);  
+
+    char far *bpb_cast_ptr = (char far *)(fpRequest->r_bpbptr);  
 
     if (debug) cdprintf("gathered bpb_ptr: %x\n", bpb_cast_ptr);
     /* Parse the options from the CONFIG.SYS file, if any... */
@@ -155,7 +150,7 @@ uint16_t deviceInit( void )
         //fpRequest->r_endaddr = MK_FP( getCS(), 0 );
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA ); 
     }
-    if (debug) cdprintf("done parsing bpb_ptr: %x\n", bpb_ptr);
+    if (debug) cdprintf("done parsing bpb_ptr: %x\n", bpb_cast_ptr);
 
     /* Try to make contact with the drive... */
     if (debug) cdprintf("SD: initializing drive r_unit: %d, partition_number: %d, my_bpb_ptr: %X\n", 
@@ -168,23 +163,15 @@ uint16_t deviceInit( void )
     cdprintf("sizeof char_bpb: %d\n", sizeof(char_bpb));
     initPayload.params_size = sizeof(char_bpb);
     initPayload.params = (uint8_t *)(char_bpb);
-    initPayload.data_size = 1;
-    initPayload.data = 0;
-    create_command_crc8(&initPayload);
-    create_data_crc8(&initPayload);
+    uint8_t data[1] = {0};
+    initPayload.data = &data[0];
+    initPayload.data_size = sizeof(data);
+    cdprintf("sending data_size: %d\n", initPayload.data_size);
+    cdprintf("sending data '%s'\n", initPayload.data);
+    create_payload_crc8(&initPayload);
     ResponseStatus outcome = send_command_payload(&initPayload);
     if (outcome != STATUS_OK) {
         cdprintf("Error: Failed to send DEVICE_INIT command to SD Block Device %d\n", outcome);
-        return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
-    }
-    InitPayload bpb_details= {0};
-    memset(&bpb_details, 0, sizeof(InitPayload));
-    initPayload.data_size = sizeof(InitPayload);
-    initPayload.data = (uint8_t*) &bpb_details; 
-    create_data_crc8(&initPayload);
-    outcome = receive_response(&initPayload);
-    if (outcome != STATUS_OK) {
-        cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
     
@@ -206,41 +193,39 @@ uint16_t deviceInit( void )
 
     cdprintf("SD: received response, parsing data\n");
     cdprintf("SD: num_drives: %d\n", init_details->num_units);
-    bpb far *my_bpb_ptr = (bpb far *) &init_details->bpb_array[0];
+    VictorBPB *newBpb = (VictorBPB *) &init_details->bpb_array[0];
 
     dev_header->dh_num_drives = init_details->num_units;
     fpRequest->r_nunits = init_details->num_units;         //tell DOS how many drives we're instantiating.
     num_drives = init_details->num_units;
 
     //copy the BPB details to the BPB table
-    for (int i = 0; i < bpb_details.num_units; i++) {
-        VictorBPB newBpb = bpb_details.bpb_array[i];
-        my_bpbs[i].bpb_nbyte = newBpb.bytes_per_sector;  //copy the BPB details to
-        my_bpbs[i].bpb_nsector = newBpb.sectors_per_cluster;  //the BPB table   
-        my_bpbs[i].bpb_nreserved = newBpb.reserved_sectors;
-        my_bpbs[i].bpb_nfat = newBpb.num_fats;
-        my_bpbs[i].bpb_ndirent = newBpb.root_entry_count;
-        my_bpbs[i].bpb_nsize = newBpb.total_sectors;
-        my_bpbs[i].bpb_mdesc = newBpb.media_descriptor;
-        my_bpbs[i].bpb_nfsect = newBpb.sectors_per_fat;
+    for (int i = 0; i < num_drives; i++) {
+        my_bpbs[i].bpb_nbyte = newBpb->bytes_per_sector;  //copy the BPB details to
+        my_bpbs[i].bpb_nsector = newBpb->sectors_per_cluster;  //the BPB table   
+        my_bpbs[i].bpb_nreserved = newBpb->reserved_sectors;
+        my_bpbs[i].bpb_nfat = newBpb->num_fats;
+        my_bpbs[i].bpb_ndirent = newBpb->root_entry_count;
+        my_bpbs[i].bpb_nsize = newBpb->total_sectors;
+        my_bpbs[i].bpb_mdesc = newBpb->media_descriptor;
+        my_bpbs[i].bpb_nfsect = newBpb->sectors_per_fat;
     }
     
     fpRequest->r_bpbptr = my_bpb_tbl_ptr;
 
     if (debug) {
-        cdprintf("SD: done parsing bpb_ptr: = %4x:%4x\n", FP_SEG(bpb_ptr), FP_OFF(bpb_ptr));
-        cdprintf("SD: done parsing my_bpb_ptr = %4x:%4x\n", FP_SEG(my_bpb_ptr), FP_OFF(my_bpb_ptr));
+        cdprintf("SD: done parsing my_bpb: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
         cdprintf("SD: done parsing my_bpbtbl_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_ptr), FP_OFF(my_bpb_tbl_ptr));
         cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(0));
         cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
         cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
     }
 
-    uint32_t bpb_start = calculateLinearAddress(FP_SEG(my_bpb_ptr) , FP_OFF(my_bpb_ptr));
+    uint32_t bpb_start = calculateLinearAddress(FP_SEG(my_bpb_tbl_ptr) , FP_OFF(my_bpb_tbl_ptr));
 
     if (debug) {
-        cdprintf("SD: my_bpb_ptr = %4x:%4x  %5X\n", FP_SEG(my_bpb_ptr), FP_OFF(my_bpb_ptr), bpb_start);
-        writeToDriveLog("SD: my_bpb_ptr = %4x:%4x  %5X\n", FP_SEG(my_bpb_ptr), FP_OFF(my_bpb_ptr), bpb_start);
+        cdprintf("SD: my_bpb = %4x:%4x  %5X\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]), bpb_start);
+        writeToDriveLog("SD: my_bpbtbl_ptr = %4x:%4x  %5X\n", FP_SEG(my_bpb_tbl_ptr), FP_OFF(my_bpb_tbl_ptr), bpb_start);
         cdprintf("SD: initialized on DOS drive %c r_firstunit: %d r_nunits: %d\n",(
             fpRequest->r_firstunit + 'A'), fpRequest->r_firstunit, fpRequest->r_nunits);
     
@@ -257,19 +242,17 @@ uint16_t deviceInit( void )
     if (debug)
     {   
       cdprintf("SD: BPB data:\n");
-      cdprintf("Bytes per Sector: %d\n", my_bpb_ptr->bpb_nbyte);
-      cdprintf("Sectors per Allocation Unit: %d\n", my_bpb_ptr->bpb_nsector);
-      cdprintf("# Reserved Sectors: %d\n", my_bpb_ptr->bpb_nreserved);
-      cdprintf("# FATs: %d\n", my_bpb_ptr->bpb_nfat);
-      cdprintf("# Root Directory entries: %d  ", my_bpb_ptr->bpb_ndirent);
-      cdprintf("Size in sectors: %d\n", my_bpb_ptr->bpb_nsize);
-      cdprintf("MEDIA Descriptor Byte: %x  ", my_bpb_ptr->bpb_mdesc);
-      cdprintf("FAT size in sectors: %d\n", my_bpb_ptr->bpb_nfsect);
-      // cdprintf("Sectors per track : %d  ", my_bpb_ptr->bpb_nsecs);
-      // cdprintf("Number of heads: %d\n", my_bpb_ptr->bpb_nheads);
-      // cdprintf("Hidden sectors: %d  ", my_bpb_ptr->bpb_hidden);
-      // cdprintf("Hidden sectors 32 hex: %L\n", my_bpb_ptr->bpb_hidden);
-      // cdprintf("Size in sectors if : %L\n", my_bpb_ptr->bpb_huge);
+      for (int i = 0; i < num_drives; i++) {
+        cdprintf("Drive %c\n", (fpRequest->r_firstunit + i + 'A'));
+        cdprintf("Bytes per Sector: %d\n", my_bpb_tbl_ptr[i].bpb_nbyte);
+        cdprintf("Sectors per Allocation Unit: %d\n", my_bpb_tbl_ptr[i].bpb_nsector);
+        cdprintf("# Reserved Sectors: %d\n", my_bpb_tbl_ptr[i].bpb_nreserved);
+        cdprintf("# FATs: %d\n", my_bpb_tbl_ptr[i].bpb_nfat);
+        cdprintf("# Root Directory entries: %d  ", my_bpb_tbl_ptr[i].bpb_ndirent);
+        cdprintf("Size in sectors: %d\n", my_bpb_tbl_ptr[i].bpb_nsize);
+        cdprintf("MEDIA Descriptor Byte: %x  ", my_bpb_tbl_ptr[i].bpb_mdesc);
+        cdprintf("FAT size in sectors: %d\n", my_bpb_tbl_ptr[i].bpb_nfsect);
+    }
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(&transient_data));
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(fpRequest->r_endaddr));
 

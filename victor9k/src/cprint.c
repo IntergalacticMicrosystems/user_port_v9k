@@ -243,9 +243,6 @@ void writeToDriveLog(const char* format, ...) {
     *bufferPtr = '\0'; // Null-terminate the buffer
     va_end(args);
 
-    size_t messageLen = bufferPtr - buffer;
-
-
     // Write the formatted message to the current position
     if (debug) {
         //writeBuffer(buffer);

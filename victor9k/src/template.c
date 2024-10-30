@@ -30,7 +30,6 @@
 #include "devinit.h"
 #include "template.h"
 #include "cprint.h"     /* Console printing direct to hardware */
-#include "sd.h"
 #include "../../common/protocols.h"
 #include "../../common/dos_device_payloads.h"
 
@@ -194,28 +193,27 @@ static uint16_t readBlock (void)
   if (initNeeded)  return (S_DONE | S_ERROR | E_NOT_READY); //not initialized yet
 
   uint16_t count; 
-  uint16_t numberOfSectorsToCopy = fpRequest->r_count;  
 
   if (initNeeded)  return (S_DONE | S_ERROR | E_NOT_READY); //not initialized yet
   //TODO: double check all this math below. differs greatly across media
-  count = fpRequest->r_count,  
-          fpRequest->r_start;  
+  count = fpRequest->r_count;  
   uint8_t far * dta = (uint8_t far *)fpRequest->r_trans;
   uint32_t lbn = fpRequest->r_start;
   while (count > 0) {
       uint16_t sendct = (count > 16) ? 16 : count;
       //int sd_read (uint16_t unit, uint32_t lbn, uint8_t far *buffer, uint16_t count)
-      int16_t status = sd_read(fpRequest->r_unit, lbn, dta, sendct);
+      //TODO: make this real
+      int16_t status = 0; // sd_read(fpRequest->r_unit, lbn, dta, sendct);
 
       if (status != RES_OK)  {
         if (debug) cdprintf("SD: read error - status=%d\n", status);
-        //_fmemset(dta, 0, BLOCKSIZE);
+        //_fmemset(dta, 0, SECTOR_SIZE);
         return (S_DONE | S_ERROR | dosError(status));
       }
 
     lbn += sendct;
     count -= sendct;
-    dta += (sendct*BLOCKSIZE);
+    dta += (sendct*SECTOR_SIZE);
   }
   return (S_DONE);
 }
@@ -231,7 +229,6 @@ static uint16_t write_block (bool verify)
   int status; 
   uint8_t far *dta;
   uint16_t sendct;
-  bool success, hard_disk, left;
 
   if (debug) {
         writeToDriveLog("SD: write block: media_desc=%d, start=%d, count=%d, r_trans=%x:%x verify: %d fpRequest: %x:%x\n",
@@ -246,7 +243,8 @@ static uint16_t write_block (bool verify)
   lbn = fpRequest->r_start;
   while (count > 0) {
     sendct = (count > 16) ? 16 : count;
-    status = sd_write(fpRequest->r_unit, lbn, dta, sendct);
+    //todo: make this real
+    status = 0;   //sd_write(fpRequest->r_unit, lbn, dta, sendct);
 
     if (status != RES_OK)  {
       if (debug) cdprintf("SD: write error - status=%d\n", status);
@@ -255,7 +253,7 @@ static uint16_t write_block (bool verify)
 
     lbn += sendct;
     count -= sendct;
-    dta += (sendct*BLOCKSIZE);
+    dta += (sendct*SECTOR_SIZE);
   }
   return (S_DONE);
 }
