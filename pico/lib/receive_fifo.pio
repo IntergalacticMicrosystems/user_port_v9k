@@ -22,7 +22,7 @@
     push
 
     ; Pull GPIO28 low to indicate Data Taken
-    set pins, 0 [3]      ; Set GPIO28 low
+    set pins, 0 [BIT_SAMPLE_DELAY]      ; Set GPIO28 low
 
     ; Pull GPIO28 high again to reset Data Taken signal
     set pins, 1       ; Set GPIO28 high

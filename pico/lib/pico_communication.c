@@ -16,6 +16,8 @@
 #include "command_dispatch.h"
 #include "sd_block_device.h"
 
+#define __no_inline_not_in_flash_func(read_burst_from_pio_fifo) __noinline __not_in_flash_func(read_burst_from_pio_fifo)
+
 
 PIO_state* init_pio(void) {
     stdio_init_all();
@@ -105,7 +107,7 @@ PIO_state* init_pio(void) {
 
     //for 1 MHz signal, sample PIO at 4MHz for clarity of signal
     //float target_freq = 4.0e6;  // 4MHz in Hz
-    float target_freq = 4.0e6; 
+    float target_freq = 30.0e6; 
     //equal to 125MHz system clock / 4MHz sampling rate
     float clkdiv = clock_get_hz(clk_sys) / target_freq; 
 
@@ -195,6 +197,12 @@ ResponseStatus receive_command_payload(PIO_state *pio_state, Payload *payload) {
     return outcome;
 }
 
+void read_burst_from_pio_fifo(PIO pio, uint sm, uint8_t *receiveData, uint32_t loop_size) {
+    int count = 0;
+    for (int i = 0; i < loop_size; ++i) {
+        receiveData[i]= pio_sm_get_blocking(pio, sm);
+    }
+}
 
 ResponseStatus receive_command_packet(PIO_state *pio_state, Payload *payload) {
     printf("Waiting for command packet\n");
@@ -218,9 +226,7 @@ ResponseStatus receive_command_packet(PIO_state *pio_state, Payload *payload) {
     }
     printf("Protocol: %d, Command: %d\n", payload->protocol, payload->command);
     printf("Recieving command parameters, size: %d\n", payload->params_size);
-    for(int i = 0; i < payload->params_size; ++i) {
-        payload->params[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    }
+    read_burst_from_pio_fifo(pio_state->pio, pio_state->rx_sm, payload->params, payload->params_size);
     payload->command_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     printf("Done getting command packet %d\n", payload->command_crc);
     if ( !is_valid_command_crc8(payload) ) {
@@ -244,9 +250,8 @@ ResponseStatus receive_data_packet(PIO_state *pio_state, Payload *payload) {
         return MEMORY_ALLOCATION_ERROR;
     }
     printf("Receiving data buffer\n");
-    for(int i = 0; i < payload->data_size; ++i) {
-        payload->data[i] = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    }
+    read_burst_from_pio_fifo(pio_state->pio, pio_state->rx_sm, payload->data, payload->data_size);
+    
     printf("Receiving data buffer completed\n");
     payload->data_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     printf("Received CRC, Done getting data packet\n");
