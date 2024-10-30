@@ -78,17 +78,24 @@ void create_data_crc8(Payload *payload) {
     }
     uint8_t crc = 0x00;  // Initial value
 
+    cdprintf("Data CRC payload->data_size: %d\n", payload->data_size);
+    cdprintf("Data CRC payload->data: %s\n", payload->data);
     // Process payload->data_size as two bytes
     crc = crc8_table[crc ^ ((payload->data_size >> 8) & 0xFF)];  // High byte
-    cdprintf("Command CRC payload->data_size high byte: %d\n", crc);
+    cdprintf("Data CRC payload->data_size high byte: %d\n", crc);
     crc = crc8_table[crc ^ (payload->data_size & 0xFF)];         // Low byte
-    cdprintf("Command CRC payload->data_size low byte: %d\n", crc);
+    cdprintf("Data CRC payload->data_size low byte: %d\n", crc);
 
     for (size_t i = 0; i < payload->data_size; i++) {
         crc = crc8_table[crc ^ payload->data[i]];
     }
     cdprintf("Data CRC: %d\n", crc);
     payload->data_crc = crc;
+}
+
+void create_payload_crc8(Payload *payload) {
+    create_command_crc8(payload);
+    create_data_crc8(payload);
 }
 
 bool is_valid_command_crc8(const Payload *payload) {
@@ -126,9 +133,9 @@ bool is_valid_data_crc8(const Payload *payload) {
 
     // Process payload->data_size as two bytes
     crc = crc8_table[crc ^ ((payload->data_size >> 8) & 0xFF)];  // High byte
-    cdprintf("IsCommand CRC payload->data_size high byte: %d\n", crc);
+    cdprintf("IsData CRC payload->data_size high byte: %d\n", crc);
     crc = crc8_table[crc ^ (payload->data_size & 0xFF)];         // Low byte
-    cdprintf("IsCommand CRC payload->data_size low byte: %d\n", crc);
+    cdprintf("IsData CRC payload->data_size low byte: %d\n", crc);
 
     for (size_t i = 0; i < payload->data_size; i++) {
         crc = crc8_table[crc ^ payload->data[i]];

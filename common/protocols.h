@@ -3,6 +3,7 @@
 
 #ifndef _V9KPROTOCOLS_H_
 #define _V9KPROTOCOLS_H_
+#pragma pack(push, 1)
 typedef enum { 
     PROTOCOL_UNKNOWN = 0, 
     PICO_RESET = 1, 
@@ -56,5 +57,6 @@ typedef struct {
     uint8_t command_crc;      // CRC for the command portion of the payload
     uint8_t data_crc;         // CRC for the data portion of the payload
 } Payload;
+#pragma pack(pop)
 
 #endif /* _V9KPROTOCOLS_H_ */
