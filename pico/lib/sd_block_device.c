@@ -364,7 +364,7 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
     
 
     //return the drive information to the Victor 9000
-    response->data = (uint8_t *)&initPayload;
+    response->data = (uint8_t *)initPayload;
     response->data_size = (sizeof(InitPayload));
     create_command_crc8(response);
     create_data_crc8(response);
