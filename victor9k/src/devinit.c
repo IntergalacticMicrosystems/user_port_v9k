@@ -178,6 +178,11 @@ uint16_t deviceInit( void )
     //getting the response from the SD card
     cdprintf("command sent success, starting receive response\n");
     Payload responsePayload = {0};
+    uint8_t response_params[3] = {0};
+    responsePayload.params = &response_params[0];
+    uint8_t response_data[1520] = {0};
+    responsePayload.data = &response_data[0];
+    
     outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
         cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
@@ -193,22 +198,23 @@ uint16_t deviceInit( void )
 
     cdprintf("SD: received response, parsing data\n");
     cdprintf("SD: num_drives: %d\n", init_details->num_units);
-    VictorBPB *newBpb = (VictorBPB *) &init_details->bpb_array[0];
 
-    dev_header->dh_num_drives = init_details->num_units;
-    fpRequest->r_nunits = init_details->num_units;         //tell DOS how many drives we're instantiating.
     num_drives = init_details->num_units;
+    dev_header->dh_num_drives = num_drives;
+    fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
+    
 
     //copy the BPB details to the BPB table
     for (int i = 0; i < num_drives; i++) {
-        my_bpbs[i].bpb_nbyte = newBpb->bytes_per_sector;  //copy the BPB details to
-        my_bpbs[i].bpb_nsector = newBpb->sectors_per_cluster;  //the BPB table   
-        my_bpbs[i].bpb_nreserved = newBpb->reserved_sectors;
-        my_bpbs[i].bpb_nfat = newBpb->num_fats;
-        my_bpbs[i].bpb_ndirent = newBpb->root_entry_count;
-        my_bpbs[i].bpb_nsize = newBpb->total_sectors;
-        my_bpbs[i].bpb_mdesc = newBpb->media_descriptor;
-        my_bpbs[i].bpb_nfsect = newBpb->sectors_per_fat;
+        const VictorBPB *drive = &init_details->bpb_array[i];
+        my_bpbs[i].bpb_nbyte = drive->bytes_per_sector;  //copy the BPB details to
+        my_bpbs[i].bpb_nsector = drive->sectors_per_cluster;  //the BPB table   
+        my_bpbs[i].bpb_nreserved = drive->reserved_sectors;
+        my_bpbs[i].bpb_nfat = drive->num_fats;
+        my_bpbs[i].bpb_ndirent = drive->root_entry_count;
+        my_bpbs[i].bpb_nsize = drive->total_sectors;
+        my_bpbs[i].bpb_mdesc = drive->media_descriptor;
+        my_bpbs[i].bpb_nfsect = drive->sectors_per_fat;
     }
     
     fpRequest->r_bpbptr = my_bpb_tbl_ptr;
@@ -233,7 +239,7 @@ uint16_t deviceInit( void )
 
     // /* All is well.  Tell DOS how many units and the BPBs... */
     uint8_t i;
-    for (i=0; i < fpRequest->r_nunits; i++) {
+    for (i=0; i < num_drives; i++) {
         if (debug) {cdprintf("SD:  my_drives: %d drive %c\n", i, (fpRequest->r_firstunit + 'A'));}
     }
     initNeeded = false;
