@@ -61,7 +61,7 @@
 #include "../../common/crc8.h"
 
 #pragma data_seg("_CODE")
-bool debug = FALSE;
+bool debug = TRUE;
 static uint8_t portbase;
 static uint8_t partition_number = 0;
 //
@@ -240,7 +240,7 @@ uint16_t deviceInit( void )
     // /* All is well.  Tell DOS how many units and the BPBs... */
     uint8_t i;
     for (i=0; i < num_drives; i++) {
-        if (debug) {cdprintf("SD:  my_drives: %d drive %c\n", i, (fpRequest->r_firstunit + 'A'));}
+        if (debug) {cdprintf("SD:  my_drives: %d drive %c\n", i, (fpRequest->r_firstunit + i + 'A'));}
     }
     initNeeded = false;
 
@@ -250,14 +250,15 @@ uint16_t deviceInit( void )
       cdprintf("SD: BPB data:\n");
       for (int i = 0; i < num_drives; i++) {
         cdprintf("Drive %c\n", (fpRequest->r_firstunit + i + 'A'));
+        cdprintf("Bytes per Sector: %d\n", my_bpbs[i].bpb_nbyte);
         cdprintf("Bytes per Sector: %d\n", my_bpb_tbl_ptr[i].bpb_nbyte);
-        cdprintf("Sectors per Allocation Unit: %d\n", my_bpb_tbl_ptr[i].bpb_nsector);
-        cdprintf("# Reserved Sectors: %d\n", my_bpb_tbl_ptr[i].bpb_nreserved);
-        cdprintf("# FATs: %d\n", my_bpb_tbl_ptr[i].bpb_nfat);
-        cdprintf("# Root Directory entries: %d  ", my_bpb_tbl_ptr[i].bpb_ndirent);
-        cdprintf("Size in sectors: %d\n", my_bpb_tbl_ptr[i].bpb_nsize);
-        cdprintf("MEDIA Descriptor Byte: %x  ", my_bpb_tbl_ptr[i].bpb_mdesc);
-        cdprintf("FAT size in sectors: %d\n", my_bpb_tbl_ptr[i].bpb_nfsect);
+        cdprintf("Sectors per Allocation Unit: %d\n", my_bpbs[i].bpb_nsector);
+        cdprintf("# Reserved Sectors: %d\n", my_bpbs[i].bpb_nreserved);
+        cdprintf("# FATs: %d\n", my_bpbs[i].bpb_nfat);
+        cdprintf("# Root Directory entries: %d  ", my_bpbs[i].bpb_ndirent);
+        cdprintf("Size in sectors: %d\n", my_bpbs[i].bpb_nsize);
+        cdprintf("MEDIA Descriptor Byte: %x  ", my_bpbs[i].bpb_mdesc);
+        cdprintf("FAT size in sectors: %d\n", my_bpbs[i].bpb_nfsect);
     }
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(&transient_data));
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(fpRequest->r_endaddr));
