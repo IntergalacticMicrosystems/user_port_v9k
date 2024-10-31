@@ -79,7 +79,7 @@ void create_data_crc8(Payload *payload) {
     uint8_t crc = 0x00;  // Initial value
 
     cdprintf("Data CRC payload->data_size: %d\n", payload->data_size);
-    cdprintf("Data CRC payload->data: %s\n", payload->data);
+    //cdprintf("Data CRC payload->data: %s\n", payload->data);
     // Process payload->data_size as two bytes
     crc = crc8_table[crc ^ ((payload->data_size >> 8) & 0xFF)];  // High byte
     cdprintf("Data CRC payload->data_size high byte: %d\n", crc);
