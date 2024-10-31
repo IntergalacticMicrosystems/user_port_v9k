@@ -141,11 +141,10 @@ ResponseStatus receiveBytes(uint8_t* data, size_t length) {
    }
    cdprintf("receiveBytesPA start size: %d\n", length);
    for (size_t i = 0; i < length; ++i) {
-      cdprintf("waiting for data i: %d int_flag_reg: %x\n", i, via3->int_flag_reg);
+      //cdprintf("waiting for data i: %d int_flag_reg: %x\n", i, via3->int_flag_reg);
       while ((via3->int_flag_reg & CA1_INTERRUPT_MASK) == 0) {}; // Poll CA1 for Data Ready signal
-      
       data[i] = via3->out_in_reg_a; // get data byte
-      cdprintf("received: %d %d\n", i, data[i]);
+      //cdprintf("received: %d %d\n", i, data[i]);
    }
    cdprintf("receiveBytesPA end\n");
    return STATUS_OK;
@@ -232,6 +231,8 @@ ResponseStatus send_command_payload(Payload *payload) {
         if (crc_outcome != STATUS_OK) {
             continue;
         }
+        cdprintf("command packet sent\n");
+        break;
     }
     return crc_outcome;
 }
@@ -292,14 +293,10 @@ ResponseStatus receive_response(Payload *response) {
         return INVALID_CRC;
     }
     cdprintf("Receiving data size: %d\n", response->data_size);
-    uint8_t expected_size = response->data_size;  // passed in the expected payload size
-    response->data_size = receive_uint16_t();     // actual size of the payload
+    response->data_size = receive_uint16_t();    
     cdprintf("data_size: %d\n", response->data_size);
-    if (response->data_size > expected_size) {
-        cdprintf("data_size invalid\n");
-    }
     cdprintf("Receiving data\n");
-    receiveBytes( (uint8_t *) response->data, response->data_size);
+    receiveBytes( response->data, response->data_size);
     cdprintf("Receiving data_crc\n");
     receiveBytes( (uint8_t *) &response->data_crc, 1);
     if (is_valid_data_crc8(response) ) {
