@@ -92,19 +92,71 @@ int matches_pattern(const char *filename) {
     return 0;
 }
 
+
+// Function to read a sector from the image file
+int read_sector(FIL *img_file, uint32_t sector_number, uint8_t *buffer) {
+    FRESULT res;
+    UINT bytes_read;
+
+    // Move the file pointer to the desired sector
+    FSIZE_t offset = (FSIZE_t)sector_number * SECTOR_SIZE;
+    res = f_lseek(img_file, offset);
+    if (res != FR_OK) {
+        printf("f_lseek failed: %d\n", res);
+        return -1;
+    }
+
+    // Read SECTOR_SIZE bytes into the buffer
+    res = f_read(img_file, buffer, SECTOR_SIZE, &bytes_read);
+    if (res != FR_OK) {
+        printf("f_read failed: %d\n", res);
+        return -1;
+    }
+    if (bytes_read != SECTOR_SIZE) {
+        printf("Incomplete read: expected %u bytes, got %u bytes\n", SECTOR_SIZE, bytes_read);
+        return -1;
+    }
+
+    return 0;
+}
+
+// Function to parse the partition table and get the starting sector of the first partition
+uint32_t get_first_partition_start(uint8_t *mbr_buffer) {
+    // Partition table starts at byte offset 446
+    uint8_t *partition_entry = mbr_buffer + 446;
+    // Starting sector is a 4-byte little-endian value at offset 8 within the partition entry
+    uint32_t start_sector = partition_entry[8] |
+                            (partition_entry[9] << 8) |
+                            (partition_entry[10] << 16) |
+                            (partition_entry[11] << 24);
+    return start_sector;
+}
+
 /* Function to parse the BPB from a FAT16 .img file */
 int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
 
-    uint8_t boot_sector[512]; /* Boot sector is typically 512 bytes */
+    FRESULT res;
+    uint8_t buffer[SECTOR_SIZE];
+
+    uint8_t boot_sector[SECTOR_SIZE]; 
     size_t bytes_read;
 
-    /* Read the first 512 bytes (boot sector) */
-    FRESULT fr = f_read(img_file, boot_sector, sizeof(boot_sector), &bytes_read);
-    if (bytes_read != sizeof(boot_sector)) {
-        perror("Error reading boot sector");
+    // Read MBR from sector 0
+    if (read_sector(img_file, 0, buffer) != 0) {
         f_close(img_file);
         return -1;
     }
+
+     // Get the starting sector of the first partition
+    uint32_t partition_start = get_first_partition_start(buffer);
+    printf("First partition starts at sector: %u\n", partition_start);
+
+    // Read the boot sector of the first partition
+    if (read_sector(img_file, partition_start, boot_sector) != 0) {
+        f_close(img_file);
+        return -1;
+    }
+
 
     /* Parse the BPB fields from the boot sector */
     bpb->bytes_per_sector     = boot_sector[11] | (boot_sector[12] << 8);
@@ -121,6 +173,18 @@ int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
                                (boot_sector[29] << 8) |
                                (boot_sector[30] << 16) |
                                (boot_sector[31] << 24);
+    printf("BPB fields parsed successfully\n");
+    printf("Bytes per sector: %d\n", bpb->bytes_per_sector);
+    printf("Sectors per cluster: %d\n", bpb->sectors_per_cluster);
+    printf("Reserved sectors: %d\n", bpb->reserved_sectors);
+    printf("Number of FATs: %d\n", bpb->num_fats);
+    printf("Root entry count: %d\n", bpb->root_entry_count);
+    printf("Total sectors: %d\n", bpb->total_sectors);
+    printf("Media descriptor: 0x%02X\n", bpb->media_descriptor);
+    printf("Sectors per FAT: %d\n", bpb->sectors_per_fat);
+    printf("Sectors per track: %d\n", bpb->sectors_per_track);
+    printf("Number of heads: %d\n", bpb->num_heads);
+    printf("Hidden sectors: %d\n", bpb->hidden_sectors);
 
     return 0; /* Success */
 }
