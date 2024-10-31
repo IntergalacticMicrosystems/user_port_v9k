@@ -129,15 +129,12 @@ void wait_for_startup_handshake(PIO_state *pio_state) {
             pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, HANDSHAKE_RESPONSE);
             printf("Sent handshake response\n");
             // Handshake is considered complete
-            break;
+            return;
 
         } else {
-                printf("Bad handshake response received: %d\n", handshake);
-                wait_for_startup_handshake(pio_state);
-                break;
-            }
+            printf("Bad handshake response received: %d\n", handshake);
         }
-    printf("Startup handshake completed\n");
+    }
 }
 
 void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
