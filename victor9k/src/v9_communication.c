@@ -214,6 +214,12 @@ void sendResponseStatus(ResponseStatus status) {
     sendBytes(&status_value, 1);               // Pass address of uint8_t
 }
 
+ResponseStatus receive_response_status() {
+    uint8_t status_value;
+    receiveBytes( &status_value, 1);
+    return (ResponseStatus)status_value;
+}
+
 ResponseStatus send_command_payload(Payload *payload) {
     ResponseStatus crc_outcome;
     for (int i = 0; i < 9; i++) {
@@ -241,7 +247,7 @@ ResponseStatus send_command_packet(Payload *payload) {
     burstBytes( payload->params, payload->params_size);  //send the actual params
     sendBytes( (uint8_t *) &payload->command_crc, 1);
 
-    ResponseStatus crc_success = via3->out_in_reg_a;
+    ResponseStatus crc_success = receive_response_status();
     return crc_success;
 }
 
@@ -253,7 +259,7 @@ ResponseStatus send_data_packet(Payload *payload) {
     burstBytes( payload->data, payload->data_size);  //send the actual data
     cdprintf("sending data_crc\n");
     sendBytes( (uint8_t *) &payload->data_crc, 1);
-    ResponseStatus crc_success = via3->out_in_reg_a;
+    ResponseStatus crc_success = receive_response_status();
     return crc_success;
 }
 
