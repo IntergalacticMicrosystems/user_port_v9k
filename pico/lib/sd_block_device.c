@@ -322,8 +322,8 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
         return response;
     }
     memset(response, 0, sizeof(Payload));
-    response->protocol = payload->protocol;
-    response->command = payload->command;
+    response->protocol = SD_BLOCK_DEVICE;
+    response->command = DEVICE_INIT;
     response->params_size = 1;
     response->params = (uint8_t *)malloc(1);
     if (response->params == NULL) {
@@ -364,7 +364,7 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
     
 
     //return the drive information to the Victor 9000
-    response->data = (uint8_t *)initPayload;
+    response->data = (uint8_t *)&initPayload;
     response->data_size = (sizeof(InitPayload));
     create_command_crc8(response);
     create_data_crc8(response);
