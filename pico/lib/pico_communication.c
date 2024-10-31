@@ -221,6 +221,7 @@ ResponseStatus receive_command_packet(PIO_state *pio_state, Payload *payload) {
         sendResponseStatus(pio_state, MEMORY_ALLOCATION_ERROR);
         return MEMORY_ALLOCATION_ERROR;
     }
+    printf("--------------------------\n");
     printf("Protocol: %d, Command: %d\n", payload->protocol, payload->command);
     printf("Recieving command parameters, size: %d\n", payload->params_size);
     read_burst_from_pio_fifo(pio_state->pio, pio_state->rx_sm, payload->params, payload->params_size);
