@@ -40,8 +40,10 @@ uint8_t *stack_bottom = our_stack + STACK_SIZE;
 uint32_t dos_stack;
 bool initNeeded = TRUE;
 int8_t num_drives = -1;
-bpb my_bpbs[MAX_IMG_FILES] = {0};            // Array of BPB instances
-bpb far *my_bpb_tbl_ptr = &my_bpbs[0];    // Far pointer to the BPB table
+bpb my_bpbs[MAX_IMG_FILES] = {0};  // Array of BPB instances
+bpb near *my_bpb_tbl[MAX_IMG_FILES];    // Array of near pointers to BPB structures
+bpb *far my_bpb_tbl_far_ptr = (bpb *far)my_bpb_tbl;   // Far pointer to the BPB table
+
 extern bool debug;
 
 #endif // USE_INTERNAL_STACK
@@ -98,7 +100,7 @@ static uint16_t buildBpb (void)
       fpRequest->r_bpmdesc, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
       FP_SEG(fpRequest->r_bpptr), FP_OFF(fpRequest->r_bpptr), bpb_start);
   //we build the BPB during the deviceInit() method. just return pointer to built table
-  fpRequest->r_bpptr = my_bpb_tbl_ptr;
+  fpRequest->r_bpptr = my_bpb_tbl_far_ptr;
 
   return S_DONE;
 }

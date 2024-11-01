@@ -70,7 +70,9 @@ static uint8_t partition_number = 0;
 //static char hellomsg[] = "\r\nDOS Device Driver Template in Open Watcom C\r\n$";
 extern int8_t num_drives;
 extern bpb my_bpbs[MAX_IMG_FILES];  // Array of BPB instances
-extern bpb far *my_bpb_tbl_ptr;     // Far pointer to bpb array
+extern bpb near *my_bpb_tbl[MAX_IMG_FILES];    // Array of near pointers to BPB structures
+extern bpb far *my_bpb_tbl_far_ptr;   // Far pointer to the BPB table
+
 extern bool initNeeded;
 
 
@@ -135,6 +137,11 @@ uint16_t deviceInit( void )
     if (debug) {
         cdprintf("SD: dh_name: %s\n", name_buffer);
         cdprintf("SD: dh_next: %x\n", dev_header->dh_next);
+    }
+
+    //initialize the BPB table
+    for (int i = 0; i < MAX_IMG_FILES; i++) {
+        my_bpb_tbl[i] = &my_bpbs[i];
     }
 
     //DOS is overloading a data structure that in normal use stores the BPB, 
@@ -202,6 +209,8 @@ uint16_t deviceInit( void )
     num_drives = init_details->num_units;
     dev_header->dh_num_drives = num_drives;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
+    bpb near **far my_bpb_tbl_far_ptr = (bpb near **far)MK_FP(registers.cs, (unsigned)&my_bpb_tbl[0]);
+    fpRequest->r_bpbptr = (bpb *far) my_bpb_tbl_far_ptr;  // Pass to DOS the far pointer to our array of bpb poitners
     
 
     //copy the BPB details to the BPB table
@@ -217,21 +226,19 @@ uint16_t deviceInit( void )
         my_bpbs[i].bpb_nfsect = drive->sectors_per_fat;
     }
     
-    fpRequest->r_bpbptr = my_bpb_tbl_ptr;
-
     if (debug) {
         cdprintf("SD: done parsing my_bpb: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
-        cdprintf("SD: done parsing my_bpbtbl_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_ptr), FP_OFF(my_bpb_tbl_ptr));
+        cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(0));
         cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
         cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
     }
 
-    uint32_t bpb_start = calculateLinearAddress(FP_SEG(my_bpb_tbl_ptr) , FP_OFF(my_bpb_tbl_ptr));
+    uint32_t bpb_start = calculateLinearAddress(FP_SEG(my_bpb_tbl_far_ptr) , FP_OFF(my_bpb_tbl_far_ptr));
 
     if (debug) {
         cdprintf("SD: my_bpb = %4x:%4x  %5X\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]), bpb_start);
-        writeToDriveLog("SD: my_bpbtbl_ptr = %4x:%4x  %5X\n", FP_SEG(my_bpb_tbl_ptr), FP_OFF(my_bpb_tbl_ptr), bpb_start);
+        writeToDriveLog("SD: my_bpb_tbl_far_ptr = %4x:%4x  %5X\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr), bpb_start);
         cdprintf("SD: initialized on DOS drive %c r_firstunit: %d r_nunits: %d\n",(
             fpRequest->r_firstunit + 'A'), fpRequest->r_firstunit, fpRequest->r_nunits);
     
@@ -251,7 +258,7 @@ uint16_t deviceInit( void )
       for (int i = 0; i < num_drives; i++) {
         cdprintf("Drive %c\n", (fpRequest->r_firstunit + i + 'A'));
         cdprintf("Bytes per Sector: %d\n", my_bpbs[i].bpb_nbyte);
-        cdprintf("Bytes per Sector: %d\n", my_bpb_tbl_ptr[i].bpb_nbyte);
+        cdprintf("Bytes per Sector: %d\n", my_bpb_tbl_far_ptr[i]->bpb_nbyte);
         cdprintf("Sectors per Allocation Unit: %d\n", my_bpbs[i].bpb_nsector);
         cdprintf("# Reserved Sectors: %d\n", my_bpbs[i].bpb_nreserved);
         cdprintf("# FATs: %d\n", my_bpbs[i].bpb_nfat);
