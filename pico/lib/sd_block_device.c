@@ -425,8 +425,6 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
         }
     }
 
-    
-
     //return the drive information to the Victor 9000
     response->data = (uint8_t *)initPayload;
     response->data_size = (sizeof(InitPayload));
@@ -438,64 +436,75 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
 }
 
 Payload* media_check(SDState *sdState, PIO_state *pio_state, Payload *payload) {
-
+    //fully in RAM on Victor 9000, not needed here
 }
 
 Payload* build_bpb(SDState *sdState, PIO_state *pio_state, Payload *payload) {
-
+    //fully in RAM on Victor 9000, not needed here
 }
 
 Payload* victor9k_drive_info(SDState *sdState, PIO_state *pio_state, Payload *payload) {
-
+    //fully in RAM on Victor 9000, not needed here
 }
 
 Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
+    ReadParams *readParams = (ReadParams *)payload->params;
+
     Payload *response = (Payload*)malloc(sizeof(Payload));
     if (response == NULL) {
         printf("Error: Memory allocation failed for payload\n");
-        return response;
+        return NULL;
     }
     memset(response, 0, sizeof(Payload));
-    response->protocol = payload->protocol;
-    response->command = payload->command;
-    response->params_size = 0;
-    response->params = NULL;
-    create_command_crc8(response);
-    create_data_crc8(response);
+    response->protocol = SD_BLOCK_DEVICE;
+    response->command = READ_BLOCK;
+    response->params = (uint8_t *)malloc(1);
+    if (response->params == NULL) {
+        printf("Error: Memory allocation failed for response->params\n");
+        free(response);
+        return NULL;
+    }
+    response->params[0] = 0;
 
-    //TODO fix so driveNumber is pulled from payload
-    int driveNumber = 0;
+    int driveNumber = readParams->drive_number;
 
     // Calculate the offset in the .img file
-    //tod fix so startSector is pulled from payload
-    int startSector = 0;
+    int startSector = readParams->start_sector;
     long offset = startSector * SECTOR_SIZE;
 
     // Move to the calculated offset
     if (FR_OK != f_lseek(sdState->img_file[driveNumber], offset)) {
-        perror("Failed to seek to offset");
-        f_close(sdState->img_file[driveNumber]);
+        printf("Failed to seek to offset");
         response->status = FILE_SEEK_ERROR;
-        return response;
+        free(response->params);
+        free(response);
+        return NULL;
     }
 
     // Calculate the number of bytes to read
-    //todo fix so sectorCount is pulled from payload
-    int sectorCount = 1;
+    int sectorCount = readParams->sector_count;
     size_t bytesToRead = sectorCount * SECTOR_SIZE;
 
     // Read the data into the buffer
-    //todo fix so buffer size is determined form payload
     char *buffer = (char *)malloc(bytesToRead);
-    size_t *bytesRead;
-    FRESULT result = f_read(sdState->img_file[driveNumber], buffer, bytesToRead, bytesRead);
-    if (FR_OK != result) {
-        perror("Failed to read the expected number of bytes");
-        f_close(sdState->img_file[driveNumber]);
-        response->status = FILE_SEEK_ERROR;
-        return response;
+    if (buffer == NULL) {
+        printf("Failed to allocate buffer");
+        response->status = MEMORY_ALLOCATION_ERROR;
+        free(response->params);
+        free(response);
+        return NULL;
     }
-    response->data_size = (uint16_t) *bytesRead;
+    UINT bytesRead;
+    FRESULT result = f_read(sdState->img_file[driveNumber], buffer, bytesToRead, &bytesRead);
+    if (FR_OK != result) {
+        DBG_PRINTF("Failed to read the expected number of bytes");
+        response->status = FILE_SEEK_ERROR;
+        free(buffer);
+        free(response->params);
+        free(response);
+        return NULL;
+    }
+    response->data_size = (uint16_t) bytesRead;
     response->data = buffer;
     response->status = STATUS_OK;
     create_command_crc8(response);
