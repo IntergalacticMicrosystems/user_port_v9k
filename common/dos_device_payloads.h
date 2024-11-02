@@ -122,14 +122,14 @@ typedef struct {
     int8_t media_descriptor;  /*  Media Descriptor    */
     uint16_t sector_count;    /*  Byte/Sector Count   */
     uint16_t start_sector;    /*  Starting Sector No. */
-    uint8_t volume_id;        /*  Pointer to volume id */ 
-} ReadPayload;
+    uint8_t drive_number;     /*  Drive Image Number  */ 
+} ReadParams;
 
 typedef struct {  
     int8_t media_descriptor;  /*  Media Descriptor    */
     uint16_t sector_count;    /*  Byte/Sector Count   */
     uint16_t start_sector;    /*  Starting Sector No. */
-    uint8_t volume_id;        /*  Pointer to volume id */ 
+    uint8_t drive_number;     /*  Drive Image Number  */ 
 } WritePayload;
 #pragma pack(pop)
 
