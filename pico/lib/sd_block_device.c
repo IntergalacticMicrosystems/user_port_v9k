@@ -514,6 +514,60 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
 }
 
 Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
+    ReadParams *writeParams = (ReadParams *)payload->params;
+
+    Payload *response = (Payload*)malloc(sizeof(Payload));
+    if (response == NULL) {
+        printf("Error: Memory allocation failed for payload\n");
+        return NULL;
+    }
+    memset(response, 0, sizeof(Payload));
+    response->protocol = SD_BLOCK_DEVICE;
+    response->command = WRITE_NO_VERIFY;
+    response->params = (uint8_t *)malloc(1);
+    if (response->params == NULL) {
+        printf("Error: Memory allocation failed for response->params\n");
+        free(response);
+        return NULL;
+    }
+    response->params[0] = 0;
+
+    int driveNumber = writeParams->drive_number;
+
+    // Calculate the offset in the .img file
+    int startSector = writeParams->start_sector;
+    long offset = startSector * SECTOR_SIZE;
+
+    // Move to the calculated offset
+    if (FR_OK != f_lseek(sdState->img_file[driveNumber], offset)) {
+        printf("Failed to seek to offset");
+        response->status = FILE_SEEK_ERROR;
+        free(response->params);
+        free(response);
+        return NULL;
+    }
+
+    // Calculate the number of bytes to write
+    int sectorCount = writeParams->sector_count;
+    size_t bytesToWrite = sectorCount * SECTOR_SIZE;
+
+    UINT bytesWriten;
+    FRESULT result = f_write(sdState->img_file[driveNumber], payload->data, bytesToWrite, &bytesWriten);
+    if (FR_OK != result) {
+        DBG_PRINTF("Failed to read the expected number of bytes");
+        response->status = FILE_SEEK_ERROR;
+        free(response->params);
+        free(response);
+        return NULL;
+    }
+    response->data_size = 1;
+    response->data = (uint8_t *)malloc(1);
+    response->data[0] = 0;
+    response->status = STATUS_OK;
+    create_command_crc8(response);
+    create_data_crc8(response);
+    
+    return response;
 
 }
 

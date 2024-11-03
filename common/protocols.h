@@ -26,6 +26,7 @@ typedef enum {
 #define MAX_IMG_FILES 9
 #define FILENAME_MAX_LENGTH 260
 #define SECTOR_SIZE 512
+#define BUFFER_SECTOR_SIZE 10
 #define STARTUP_HANDSHAKE 0x0F  // Handshake byte to start communication ASCII SI  (shift in)
 #define HANDSHAKE_RESPONSE 0x0E // Handshake byte to acknowledge communication ASCII SO (shift out)
 
@@ -53,7 +54,12 @@ typedef struct {
     uint16_t params_size;     // Size of params
     uint16_t data_size;       // Size of data
     uint8_t *params;          // Command parameters
+    #ifdef __WATCOMC__
+    uint8_t far *data;            // Data payload
+    #endif
+    #ifdef __GNUC__
     uint8_t *data;            // Data payload
+    #endif
     uint8_t command_crc;      // CRC for the command portion of the payload
     uint8_t data_crc;         // CRC for the data portion of the payload
 } Payload;

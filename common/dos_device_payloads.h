@@ -130,7 +130,7 @@ typedef struct {
     uint16_t sector_count;    /*  Byte/Sector Count   */
     uint16_t start_sector;    /*  Starting Sector No. */
     uint8_t drive_number;     /*  Drive Image Number  */ 
-} WritePayload;
+} WriteParams;
 #pragma pack(pop)
 
 #endif /* _DOS_DEVICE_PAYLOADS_H_ */

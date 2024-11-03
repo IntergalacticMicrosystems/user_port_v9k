@@ -189,16 +189,19 @@ unsigned get_stackpointer();
 static uint16_t readBlock (void)
 {
     // cdprintf("SD: readBlock()\n");
+    
+    uint16_t sector_count = fpRequest->r_count;
+    uint16_t start_sector = fpRequest->r_start;
+    uint8_t media_descriptor = fpRequest->r_meddesc;
+    uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
     if (debug) {
       writeToDriveLog("SD: read block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
-        fpRequest->r_meddesc, fpRequest->r_start, fpRequest->r_count, 
+        media_descriptor, start_sector, sector_count, 
+                FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
+      cdprintf("SD: read block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
+        media_descriptor, start_sector, sector_count, 
                 FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
     }
-    uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
-    uint16_t sectors_remaining = fpRequest->r_count;
-    uint16_t start_sector = fpRequest->r_start;
-    uint16_t sectors_to_read;
-    cdprintf("SD: readBlock() - sectors_remaining: %d, start_sector: %d\n", sectors_remaining, start_sector);
 
     //Prepare satic payload Params
     Payload readPayload = {0};
@@ -208,7 +211,7 @@ static uint16_t readBlock (void)
     // Prepare static read parameters
     ReadParams readParams = {0};
     readParams.drive_number = fpRequest->r_unit;
-    readParams.media_descriptor = fpRequest->r_meddesc;
+    readParams.media_descriptor = media_descriptor;
 
     readPayload.params_size = sizeof(readParams);
     readPayload.params = (uint8_t *)(&readParams);
@@ -217,17 +220,8 @@ static uint16_t readBlock (void)
     readPayload.data_size = sizeof(data);
     cdprintf("sending data_size: %d\n", readPayload.data_size);
 
-    uint8_t buffer[BUFFER_SECTOR_SIZE * SECTOR_SIZE] = {0};
-    uint16_t data_size = sizeof(buffer);
-
-    while (sectors_remaining > 0)
-    {
-      // Determine how many sectors to read in this iteration
-      sectors_to_read = (sectors_remaining > BUFFER_SECTOR_SIZE) ? BUFFER_SECTOR_SIZE : sectors_remaining;
-      cdprintf("sectors_to_read: %d\n", sectors_to_read);
-
       // Prepare dynamic read parameters
-      readParams.sector_count = sectors_to_read;
+      readParams.sector_count = sector_count;
       readParams.start_sector = start_sector;
       create_payload_crc8(&readPayload);
       ResponseStatus outcome = send_command_payload(&readPayload);
@@ -238,27 +232,17 @@ static uint16_t readBlock (void)
   
       //getting the response from the pico
       cdprintf("command sent success, starting receive response\n");
+
       Payload responsePayload = {0};
       uint8_t response_params[3] = {0};
       responsePayload.params = &response_params[0];
-      responsePayload.data = &buffer[0];
-      responsePayload.data_size = data_size;
+      responsePayload.data = transfer_area;
+      responsePayload.data_size = sector_count * SECTOR_SIZE;
       outcome = receive_response(&responsePayload);
       if (outcome != STATUS_OK) {
           cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
           return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
       }
-      // Copy data from the near buffer to the far transfer area
-      uint16_t bytes_to_copy = sectors_to_read * SECTOR_SIZE;
-      _fmemcpy(transfer_area, (uint8_t far *) &buffer[0], bytes_to_copy);
-
-      // Update pointers and counters for next iteration
-      sectors_remaining -= sectors_to_read;
-      start_sector += sectors_to_read;
-      transfer_area = (uint8_t far *)(transfer_area + bytes_to_copy);
-    }
-
-
     return (S_DONE);
 }
 
@@ -267,38 +251,59 @@ static uint16_t readBlock (void)
 /* Write Data with Verification */
 static uint16_t write_block (bool verify)
 {
-  //TODO Double check this math, differs by media
-  uint32_t lbn;
-  uint16_t count;  
-  int status; 
-  uint8_t far *dta;
-  uint16_t sendct;
-
+  uint16_t sector_count = fpRequest->r_count;
+  uint16_t start_sector = fpRequest->r_start;
+  uint8_t media_descriptor = fpRequest->r_meddesc;
+  uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
   if (debug) {
-        writeToDriveLog("SD: write block: media_desc=%d, start=%d, count=%d, r_trans=%x:%x verify: %d fpRequest: %x:%x\n",
-                 fpRequest->r_meddesc, fpRequest->r_start, fpRequest->r_count, 
-                 FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans), verify, 
-                 FP_SEG(fpRequest), FP_OFF(fpRequest));
+    writeToDriveLog("SD: write block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
+      media_descriptor, start_sector, sector_count, 
+              FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
+    cdprintf("SD: write block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
+      media_descriptor, start_sector, sector_count, 
+              FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
   }
 
   if (initNeeded)  return (S_DONE | S_ERROR | E_NOT_READY); //not initialized yet
-  count = fpRequest->r_count;
-  dta = (uint8_t far *)fpRequest->r_trans;
-  lbn = fpRequest->r_start;
-  while (count > 0) {
-    sendct = (count > 16) ? 16 : count;
-    //todo: make this real
-    status = 0;   //sd_write(fpRequest->r_unit, lbn, dta, sendct);
+ 
+  //Prepare satic payload Params
+    Payload writePayload = {0};
+    writePayload.protocol = SD_BLOCK_DEVICE;
+    writePayload.command = WRITE_NO_VERIFY;
 
-    if (status != RES_OK)  {
-      if (debug) cdprintf("SD: write error - status=%d\n", status);
-      return (S_DONE | S_ERROR | dosError(status));
+    // Prepare static read parameters
+    WriteParams writeParams = {0};
+    writeParams.drive_number = fpRequest->r_unit;
+    writeParams.media_descriptor = media_descriptor;
+    writeParams.sector_count = sector_count;
+    writeParams.start_sector = start_sector;
+
+    writePayload.params_size = sizeof(writeParams);
+    writePayload.params = (uint8_t *)(&writeParams);
+    writePayload.data_size = sector_count * SECTOR_SIZE;
+    writePayload.data = transfer_area;
+    
+    cdprintf("sending data_size: %d\n", writePayload.data_size);
+    create_payload_crc8(&writePayload);
+    ResponseStatus outcome = send_command_payload(&writePayload);
+    if (outcome != STATUS_OK) {
+        cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %d\n", outcome);
+        return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
+    } 
+  
+    //getting the response from the pico
+    cdprintf("command sent success, starting receive response\n");
+
+    Payload responsePayload = {0};
+    uint8_t response_params[3] = {0};
+    responsePayload.params = &response_params[0];
+    responsePayload.data = transfer_area;
+    responsePayload.data_size = sector_count * SECTOR_SIZE;
+    outcome = receive_response(&responsePayload);
+    if (outcome != STATUS_OK) {
+        cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
+        return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
-
-    lbn += sendct;
-    count -= sendct;
-    dta += (sendct*SECTOR_SIZE);
-  }
   return (S_DONE);
 }
 

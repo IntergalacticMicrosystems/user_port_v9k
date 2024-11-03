@@ -90,7 +90,7 @@ ResponseStatus initialize_user_port(void) {
 
 //sends a byte array to the user port without waiting for DATA_TAKEN signal to
 //be set before sending the next byte
-ResponseStatus burstBytes(uint8_t* data, size_t length) {
+ResponseStatus burstBytes(uint8_t far *data, size_t length) {
     if (viaInitialized == false) {
         cdprintf("VIA not initialized\n");
         initialize_user_port();
@@ -133,7 +133,7 @@ ResponseStatus sendBytes(uint8_t* data, size_t length) {
     return STATUS_OK;
 }
 
-ResponseStatus receiveBytes(uint8_t* data, size_t length) {
+ResponseStatus receiveBytes(uint8_t far *data, size_t length) {
     if (viaInitialized == false) {
         cdprintf("VIA not initialized\n");
         initialize_user_port();
