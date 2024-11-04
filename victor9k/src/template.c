@@ -69,13 +69,12 @@ static uint16_t close( void )
 /* response.  This works well enough...                                */
 static uint16_t mediaCheck (void)
 {
-  // struct ALL_REGS registers;
-  // get_all_registers(&registers);
+  struct ALL_REGS registers;
+  get_all_registers(&registers);
   // mediaCheck_data far *media_ptr;
-  //cdprintf("SD: mediaCheck()\n");
-  //cdprintf("about to parse mediaCheck, ES: %x BX: %x\n", registers.es, registers.bx);
-  //fpRequest->r_mediaCheck = MK_FP(registers.es, registers.bx);
-  //cdprintf("SD: mediaCheck: unit=%x\n", fpRequest->r_mc_vol_id);
+  cdprintf("SD: mediaCheck()\n");
+  cdprintf("about to parse mediaCheck, ES: %x BX: %x\n", registers.es, registers.bx);
+  cdprintf("SD: mediaCheck: unit=%x\n", fpRequest->r_unit);
   
   writeToDriveLog("SD: mediaCheck(): r_unit 0x%2xh media_descriptor = 0x%2xh r_mc_red_code: %d fpRequest: %x:%x\n", 
     fpRequest->r_unit, fpRequest->r_mc_media_desc, M_NOT_CHANGED,
@@ -93,11 +92,10 @@ static uint16_t mediaCheck (void)
 /* sector on the disk.  */
 static uint16_t buildBpb (void)
 {
-  // cdprintf("SD: buildBpb()\n");
+  cdprintf("SD: buildBpb()\n");
   // if (debug)
-  //     cdprintf("SD: buildBpb: unit=%x\n", fpRequest->r_bpmdesc);
+     cdprintf("SD: buildBpb: unit=%x\n", fpRequest->r_bpmdesc);
   uint32_t bpb_start = calculateLinearAddress(FP_SEG(fpRequest->r_bpptr) , FP_OFF(fpRequest->r_bpptr));
-    
   writeToDriveLog("SD: buildBpb(): media_descriptor=0x%2xh r_bpfat: %x:%x r_bpptr: %x:%x %5X", 
       fpRequest->r_bpmdesc, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
       FP_SEG(fpRequest->r_bpptr), FP_OFF(fpRequest->r_bpptr), bpb_start);
@@ -116,13 +114,13 @@ static uint16_t IOCTLInput(void)
     //for the Victor disk IOCTL the datastructure is passed on thd DS:DX registers
     V9kDiskInfo far *v9k_disk_info_ptr = MK_FP(regs.ds, regs.dx);
 
-    //cdprintf("SD: IOCTLInput()");
+    cdprintf("SD: IOCTLInput()");
     writeToDriveLog("SD: IOCTLInput(): di_ioctl_type = 0x%xh\n", v9k_disk_info_ptr->di_ioctl_type);
     {
         switch (v9k_disk_info_ptr->di_ioctl_type)
         {
         case GET_DISK_DRIVE_PHYSICAL_INFO:
-            // cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO");
+            cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO\n");
             // cdprintf("SD: IOCTLInput() -AH — IOCTL function number (44h) %x", registers.ax);
             // cdprintf("SD: IOCTLInput() -AL — IOCTL device driver read request value (4) %x", registers.ax);
             // cdprintf("SD: IOCTLInput() -BL — drive (0 = A, 1 = B, etc.) %x", registers.bx);
@@ -138,7 +136,7 @@ static uint16_t IOCTLInput(void)
             v9k_disk_info_ptr->di_disk_type = hard_disk;
             v9k_disk_info_ptr->di_disk_location = left;
 
-            //cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO - success: %d", success);
+            cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO - failed: %d\n", failed);
 
             return S_DONE;
             break;
@@ -188,7 +186,7 @@ unsigned get_stackpointer();
 
 static uint16_t readBlock (void)
 {
-    // cdprintf("SD: readBlock()\n");
+    cdprintf("SD: readBlock()\n");
     
     uint16_t sector_count = fpRequest->r_count;
     uint16_t start_sector = fpRequest->r_start;
@@ -269,7 +267,12 @@ static uint16_t write_block (bool verify)
   //Prepare satic payload Params
     Payload writePayload = {0};
     writePayload.protocol = SD_BLOCK_DEVICE;
-    writePayload.command = WRITE_NO_VERIFY;
+
+    if (verify) {
+      writePayload.command = WRITE_VERIFY;
+    } else {
+      writePayload.command = WRITE_NO_VERIFY;
+    }
 
     // Prepare static read parameters
     WriteParams writeParams = {0};

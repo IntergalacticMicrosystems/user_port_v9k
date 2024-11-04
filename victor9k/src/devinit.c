@@ -99,9 +99,6 @@ extern bool initNeeded;
 uint16_t deviceInit( void )
 {
     struct ALL_REGS registers;
-
-    
-
     get_all_registers(&registers);
 
     fpRequest->r_endaddr = MK_FP(registers.cs, &transient_data);
@@ -127,6 +124,7 @@ uint16_t deviceInit( void )
     //address to find passed by DOS in a combo of ES / BX get_all_registers
     if (debug) {
         cdprintf("about to parse bpb, ES: %x BX: %x\n", registers.es, registers.bx);
+        cdprintf("about to parse bpb, CS: %x DS: %x\n", registers.cs, registers.ds);
         cdprintf("SD: command: %d r_unit: %d\n", fpRequest->r_command, fpRequest->r_unit);
         cdprintf("SD: dh_num_drives: %d\n", dev_header->dh_num_drives);
     }
@@ -252,8 +250,7 @@ uint16_t deviceInit( void )
     initNeeded = false;
 
 
-    if (debug)
-    {   
+    if (debug) {   
       cdprintf("SD: BPB data:\n");
       for (int i = 0; i < num_drives; i++) {
         cdprintf("Drive %c\n", (fpRequest->r_firstunit + i + 'A'));
@@ -266,12 +263,11 @@ uint16_t deviceInit( void )
         cdprintf("Size in sectors: %d\n", my_bpbs[i].bpb_nsize);
         cdprintf("MEDIA Descriptor Byte: %x  ", my_bpbs[i].bpb_mdesc);
         cdprintf("FAT size in sectors: %d\n", my_bpbs[i].bpb_nfsect);
-    }
+      }
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(&transient_data));
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(fpRequest->r_endaddr));
-
     }
-   
+    cdprintf("returing SD_DONE from init()\n");
   return S_DONE;    
 }
 
