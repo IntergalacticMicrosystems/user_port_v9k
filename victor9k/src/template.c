@@ -72,11 +72,11 @@ static uint16_t mediaCheck (void)
   struct ALL_REGS registers;
   get_all_registers(&registers);
   // mediaCheck_data far *media_ptr;
-  cdprintf("SD: mediaCheck()\n");
-  cdprintf("about to parse mediaCheck, ES: %x BX: %x\n", registers.es, registers.bx);
-  cdprintf("SD: mediaCheck: unit=%x\n", fpRequest->r_unit);
+  if (debug) cdprintf("SD: mediaCheck()\n");
+  if (debug) cdprintf("about to parse mediaCheck, ES: %x BX: %x\n", registers.es, registers.bx);
+  if (debug) cdprintf("SD: mediaCheck: unit=%x\n", fpRequest->r_unit);
   
-  writeToDriveLog("SD: mediaCheck(): r_unit 0x%2xh media_descriptor = 0x%2xh r_mc_red_code: %d fpRequest: %x:%x\n", 
+  if (debug) cdprintf("SD: mediaCheck(): r_unit 0x%2xh media_descriptor = 0x%2xh r_mc_red_code: %d fpRequest: %x:%x\n", 
     fpRequest->r_unit, fpRequest->r_mc_media_desc, M_NOT_CHANGED,
     FP_SEG(fpRequest), FP_OFF(fpRequest));
  
@@ -92,11 +92,11 @@ static uint16_t mediaCheck (void)
 /* sector on the disk.  */
 static uint16_t buildBpb (void)
 {
-  cdprintf("SD: buildBpb()\n");
+  if (debug) cdprintf("SD: buildBpb()\n");
   // if (debug)
      cdprintf("SD: buildBpb: unit=%x\n", fpRequest->r_bpmdesc);
   uint32_t bpb_start = calculateLinearAddress(FP_SEG(fpRequest->r_bpptr) , FP_OFF(fpRequest->r_bpptr));
-  writeToDriveLog("SD: buildBpb(): media_descriptor=0x%2xh r_bpfat: %x:%x r_bpptr: %x:%x %5X", 
+  if (debug) cdprintf("SD: buildBpb(): media_descriptor=0x%2xh r_bpfat: %x:%x r_bpptr: %x:%x %5X", 
       fpRequest->r_bpmdesc, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
       FP_SEG(fpRequest->r_bpptr), FP_OFF(fpRequest->r_bpptr), bpb_start);
   //we build the BPB during the deviceInit() method. just return pointer to built table
@@ -115,12 +115,12 @@ static uint16_t IOCTLInput(void)
     V9kDiskInfo far *v9k_disk_info_ptr = MK_FP(regs.ds, regs.dx);
 
     cdprintf("SD: IOCTLInput()");
-    writeToDriveLog("SD: IOCTLInput(): di_ioctl_type = 0x%xh\n", v9k_disk_info_ptr->di_ioctl_type);
+    cdprintf("SD: IOCTLInput(): di_ioctl_type = 0x%xh\n", v9k_disk_info_ptr->di_ioctl_type);
     {
         switch (v9k_disk_info_ptr->di_ioctl_type)
         {
         case GET_DISK_DRIVE_PHYSICAL_INFO:
-            cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO\n");
+            if (debug) cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO\n");
             // cdprintf("SD: IOCTLInput() -AH — IOCTL function number (44h) %x", registers.ax);
             // cdprintf("SD: IOCTLInput() -AL — IOCTL device driver read request value (4) %x", registers.ax);
             // cdprintf("SD: IOCTLInput() -BL — drive (0 = A, 1 = B, etc.) %x", registers.bx);
@@ -136,7 +136,7 @@ static uint16_t IOCTLInput(void)
             v9k_disk_info_ptr->di_disk_type = hard_disk;
             v9k_disk_info_ptr->di_disk_location = left;
 
-            cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO - failed: %d\n", failed);
+            if (debug) cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO - failed: %d\n", (int16_t) failed);
 
             return S_DONE;
             break;
@@ -172,7 +172,7 @@ int dosError (int status)
     case RES_PARERR: return E_CRC_ERROR;
 
     default:
-    writeToDriveLog("SD: unknown drive error - status = 0x%2x\n", status);
+    if (debug) cdprintf("SD: unknown drive error - status = 0x%2x\n", (uint16_t) status);
         return E_GENERAL_FAILURE;
   }
 }
@@ -193,10 +193,10 @@ static uint16_t readBlock (void)
     uint8_t media_descriptor = fpRequest->r_meddesc;
     uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
     if (debug) {
-      writeToDriveLog("SD: read block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
+      if (debug) cdprintf("SD: read block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
         media_descriptor, start_sector, sector_count, 
                 FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
-      cdprintf("SD: read block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
+      if (debug) cdprintf("SD: read block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
         media_descriptor, start_sector, sector_count, 
                 FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
     }
@@ -216,7 +216,7 @@ static uint16_t readBlock (void)
     uint8_t data[1] = {0};
     readPayload.data = &data[0];
     readPayload.data_size = sizeof(data);
-    cdprintf("sending data_size: %d\n", readPayload.data_size);
+    if (debug) cdprintf("sending data_size: %u\n", readPayload.data_size);
 
       // Prepare dynamic read parameters
       readParams.sector_count = sector_count;
@@ -224,12 +224,12 @@ static uint16_t readBlock (void)
       create_payload_crc8(&readPayload);
       ResponseStatus outcome = send_command_payload(&readPayload);
       if (outcome != STATUS_OK) {
-          cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %d\n", outcome);
+          cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %d\n",(uint16_t) outcome);
           return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
       } 
   
       //getting the response from the pico
-      cdprintf("command sent success, starting receive response\n");
+      if (debug) cdprintf("command sent success, starting receive response\n");
 
       Payload responsePayload = {0};
       uint8_t response_params[3] = {0};
@@ -238,7 +238,7 @@ static uint16_t readBlock (void)
       responsePayload.data_size = sector_count * SECTOR_SIZE;
       outcome = receive_response(&responsePayload);
       if (outcome != STATUS_OK) {
-          cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
+          cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", (uint16_t) outcome);
           return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
       }
     return (S_DONE);
@@ -254,10 +254,10 @@ static uint16_t write_block (bool verify)
   uint8_t media_descriptor = fpRequest->r_meddesc;
   uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
   if (debug) {
-    writeToDriveLog("SD: write block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
+    if (debug) cdprintf("SD: write block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
       media_descriptor, start_sector, sector_count, 
               FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
-    cdprintf("SD: write block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
+    if (debug) cdprintf("SD: write block: media_descriptor=0x%2xh, start=%d, count=%d, r_trans=%x:%x\n",
       media_descriptor, start_sector, sector_count, 
               FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
   }
@@ -286,11 +286,11 @@ static uint16_t write_block (bool verify)
     writePayload.data_size = sector_count * SECTOR_SIZE;
     writePayload.data = transfer_area;
     
-    cdprintf("sending data_size: %d\n", writePayload.data_size);
+    if (debug) cdprintf("sending data_size: %u\n", (uint16_t) writePayload.data_size);
     create_payload_crc8(&writePayload);
     ResponseStatus outcome = send_command_payload(&writePayload);
     if (outcome != STATUS_OK) {
-        cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %d\n", outcome);
+        cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %u\n", (uint16_t) outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     } 
   
@@ -304,7 +304,7 @@ static uint16_t write_block (bool verify)
     responsePayload.data_size = sector_count * SECTOR_SIZE;
     outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
-        cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
+        cdprintf("SD Error: Failed to receive response from SD Block Device %u\n", (uint16_t) outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
   return (S_DONE);

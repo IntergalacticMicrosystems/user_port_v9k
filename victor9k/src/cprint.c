@@ -152,6 +152,16 @@ void writeToDriveLog(const char* format, ...) {
                     }
                     break;
                 }
+                case 'u': {
+                    uint16_t num = va_arg(args, uint16_t);
+                    char numStr[12];  // Enough for 32-bit int, sign, and null terminator
+                    char *str = intToAscii(num, (char *)numStr, sizeof(numStr));
+                    while (*str && remainingSize > 0) {
+                        *bufferPtr++ = *str++;
+                        remainingSize--;
+                    }
+                    break;
+                }
                 case 's': {
                     char *str = va_arg(args, char*);
                     while (*str && remainingSize > 0) {
@@ -365,6 +375,13 @@ void outdec (int val)
   outchr('0' + val);
 }
 
+/* outdec - print a signed decimal integer */
+void out_unsigned_dec (unsigned int val)
+{
+    {outdec( val/10 );  val %= 10;}
+  outchr('0' + val);
+}
+
 /* outhex - print a n digit hex number with leading zeros */
 void outhex (unsigned val, int ndigits)
 {
@@ -454,6 +471,11 @@ void cdprintf (char *msg, ...)
       {
         ival = va_arg(ap, int);  
         outdec (ival);
+        ++msg;
+      } else if (*msg == 'u') 
+      {
+        ival = va_arg(ap, uint16_t);  
+        out_unsigned_dec (ival);
         ++msg;
       } else if (*msg == 'x') 
       {

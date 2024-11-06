@@ -56,8 +56,8 @@ ResponseStatus initialize_user_port(void) {
     //Via-3 is the user port or control port
     //6522 (VIA 3 CS4)
     //Memory location E8080-E808F
-    cdprintf("Address of via3: %x\n", (void*)via3);
-    cdprintf("via3->out_in_reg_a: %x\n", (void*)via3);
+    if (debug) cdprintf("Address of via3: %x\n", (void*)via3);
+    if (debug) cdprintf("via3->out_in_reg_a: %x\n", (void*)via3);
 
     // Save the original 6522 Interrupt Service Routine [ISR] address
     // originalISR = _dos_getvect(INTERRUPT_NUM);
@@ -66,17 +66,17 @@ ResponseStatus initialize_user_port(void) {
     //_dos_setvect( INTERRUPT_NUM, userPortISR );
 
     via3->out_in_reg_a = 0;               // out_in_reg_a is dataport, init with 0's =input bits
-    cdprintf("setting data_dir_reg_a\n");
+    if (debug) cdprintf("setting data_dir_reg_a\n");
     via3->data_dir_reg_a = 0x00;          // register a is all inbound, 0000 = all bits incoming
-    cdprintf("clearing out_in_reg_b\n");
+    if (debug) cdprintf("clearing out_in_reg_b\n");
     via3->out_in_reg_b = 0;               // out_in_reg_b is output, clear register
-    cdprintf("setting data_dir_reg_b\n");
+    if (debug) cdprintf("setting data_dir_reg_b\n");
     via3->data_dir_reg_b = 0xFF;          // register b is all outbound, init with 1111's
 
     via3->int_enable_reg = VIA_CLEAR_INTERRUPTS;   //turn off all interrupts as base starting point
     via3->int_flag_reg = VIA_CLEAR_INTERRUPTS;    //clear all interrupt flags
 
-    cdprintf("periph_ctrl_reg\n");
+    if (debug) cdprintf("periph_ctrl_reg\n");
     via3->periph_ctrl_reg = VIA_PULSE_MODE;  // setting usage of CA/CB lines
     via3->aux_ctrl_reg = VIA_RESET_AUX_CTL;  // resets T1/T2/SR disabled, PA/PB enabled
 
@@ -84,7 +84,7 @@ ResponseStatus initialize_user_port(void) {
 
     viaInitialized = true;
 
-    cdprintf("Finished via_initialized\n");
+    if (debug) cdprintf("Finished via_initialized\n");
     return STATUS_OK;
 }
 
@@ -92,15 +92,15 @@ ResponseStatus initialize_user_port(void) {
 //be set before sending the next byte
 ResponseStatus burstBytes(uint8_t far *data, size_t length) {
     if (viaInitialized == false) {
-        cdprintf("VIA not initialized\n");
+        if (debug) cdprintf("VIA not initialized\n");
         initialize_user_port();
     }
-    cdprintf("burstBytes start\n");
+    if (debug) cdprintf("burstBytes start\n");
     
     for (size_t i = 0; i < length; ++i) {
         via3->out_in_reg_b = data[i]; // Send data byte
     }
-    cdprintf("burstBytes end\n");
+    if (debug) cdprintf("burstBytes end\n");
     return STATUS_OK;
 }
 
@@ -108,13 +108,13 @@ ResponseStatus burstBytes(uint8_t far *data, size_t length) {
 //be set before sending the next byte
 ResponseStatus sendBytes(uint8_t* data, size_t length) {
     if (viaInitialized == false) {
-        cdprintf("VIA not initialized\n");
+        if (debug) cdprintf("VIA not initialized\n");
         initialize_user_port();
     }
-    //cdprintf("sendBytesPB start\n");
+    //if (debug) cdprintf("sendBytesPB start\n");
     int iteration = 0;
     for (size_t i = 0; i < length; ++i) {
-        //cdprintf("i: %d: value: %d\n", i, data[i]);
+        //if (debug) cdprintf("i: %d: value: %d\n", i, data[i]);
         
         via3->out_in_reg_b = data[i]; // Send data byte
         //Wait for ACK on CB2periph_ctrl_reg
@@ -125,28 +125,28 @@ ResponseStatus sendBytes(uint8_t* data, size_t length) {
             }
         }
         if (iteration == MAX_POLLING_ITERATIONS) {
-            cdprintf("Timeout waiting for CB1 interrupt\n");
+            if (debug) cdprintf("Timeout waiting for CB1 interrupt\n");
             return TIMEOUT;
         }
     }
-    //cdprintf("sendBytesPB end\n");
+    //if (debug) cdprintf("sendBytesPB end\n");
     return STATUS_OK;
 }
 
 ResponseStatus receiveBytes(uint8_t far *data, size_t length) {
     if (viaInitialized == false) {
-        cdprintf("VIA not initialized\n");
+        if (debug) cdprintf("VIA not initialized\n");
         initialize_user_port();
         return PORT_NOT_INITIALIZED;
    }
-   cdprintf("receiveBytesPA start size: %d\n", length);
+   if (debug) cdprintf("receiveBytesPA start size: %d\n", length);
    for (size_t i = 0; i < length; ++i) {
-      //cdprintf("waiting for data i: %d int_flag_reg: %x\n", i, via3->int_flag_reg);
+      //if (debug) cdprintf("waiting for data i: %d int_flag_reg: %x\n", i, via3->int_flag_reg);
       while ((via3->int_flag_reg & CA1_INTERRUPT_MASK) == 0) {}; // Poll CA1 for Data Ready signal
       data[i] = via3->out_in_reg_a; // get data byte
-      //cdprintf("received: %d %d\n", i, data[i]);
+      //if (debug) cdprintf("received: %d %d\n", i, data[i]);
    }
-   cdprintf("receiveBytesPA end\n");
+   if (debug) cdprintf("receiveBytesPA end\n");
    return STATUS_OK;
 }
 
@@ -154,13 +154,13 @@ ResponseStatus send_startup_handshake(void) {
     uint8_t handshake_count = 0;
     while (handshake_count < MAX_HANDSHAKE_ATTEMPTS) {
         handshake_count++;
-        cdprintf("Handshake attempt: %d\n", handshake_count);
+        if (debug) cdprintf("Handshake attempt: %d\n", handshake_count);
 
         if (viaInitialized == false) {
-            cdprintf("VIA not initialized\n");
+            if (debug) cdprintf("VIA not initialized\n");
             ResponseStatus status = initialize_user_port();
             if (status != STATUS_OK) {
-                cdprintf("Error initializing VIA\n");
+                if (debug) cdprintf("Error initializing VIA\n");
                 return status;
             }
         }
@@ -183,24 +183,24 @@ ResponseStatus send_startup_handshake(void) {
         }
 
         if (!response_received) {
-            cdprintf("Handshake timeout, retrying\n");
+            if (debug) cdprintf("Handshake timeout, retrying\n");
             continue; // Retry handshake
         }
 
         if (response == HANDSHAKE_RESPONSE) {
-            cdprintf("Handshake successful\n");
+            if (debug) cdprintf("Handshake successful\n");
             return STATUS_OK;
         } else {
-            cdprintf("Unexpected response %d, retrying\n", response);
+            if (debug) cdprintf("Unexpected response %d, retrying\n", response);
             continue;
         }
     }
-    cdprintf("Handshake failed after %d attempts\n", handshake_count);
+    if (debug) cdprintf("Handshake failed after %d attempts\n", handshake_count);
     return TIMEOUT;
 }
 
 ResponseStatus send_uint16_t(uint16_t data) {
-    cdprintf("send_uint16_t: %d\n", data);
+    if (debug) cdprintf("send_uint16_t: %d\n", data);
     uint8_t data_array[2];
     data_array[0] = (data >> 8) & 0xFF;  //high_byte
     data_array[1] = data & 0xFF;         //low_byte;
@@ -222,7 +222,7 @@ ResponseStatus receive_response_status() {
 ResponseStatus send_command_payload(Payload *payload) {
     ResponseStatus crc_outcome;
     for (int i = 0; i < 9; i++) {
-        cdprintf("sending command packet %d\n", i);
+        if (debug) cdprintf("sending command packet %d\n", i);
         crc_outcome = send_command_packet(payload);
         if (crc_outcome != STATUS_OK) {
             continue;
@@ -231,20 +231,20 @@ ResponseStatus send_command_payload(Payload *payload) {
         if (crc_outcome != STATUS_OK) {
             continue;
         }
-        cdprintf("command packet sent\n");
+        if (debug) cdprintf("command packet sent\n");
         break;
     }
     return crc_outcome;
 }
 
 ResponseStatus send_command_packet(Payload *payload) {
-    cdprintf("sending command packet protocol: %d command: %d\n", payload->protocol, payload->command);
+    if (debug) cdprintf("sending command packet protocol: %d command: %d\n", payload->protocol, payload->command);
     sendBytes( (uint8_t *) &payload->protocol, 1);
     sendBytes( (uint8_t *) &payload->command, 1); 
     
-    cdprintf("params_size: %d\n", payload->params_size);
+    if (debug) cdprintf("params_size: %d\n", payload->params_size);
     send_uint16_t(payload->params_size);  //send the size of the params
-    cdprintf("sending params\n");
+    if (debug) cdprintf("sending params\n");
     burstBytes( payload->params, payload->params_size);  //send the actual params
     sendBytes( (uint8_t *) &payload->command_crc, 1);
 
@@ -253,12 +253,12 @@ ResponseStatus send_command_packet(Payload *payload) {
 }
 
 ResponseStatus send_data_packet(Payload *payload) {
-    cdprintf("sending data packet data_size: %d\n", payload->data_size);
-    cdprintf("data_size: %d\n", payload->data_size);
+    if (debug) cdprintf("sending data packet data_size: %d\n", payload->data_size);
+    if (debug) cdprintf("data_size: %d\n", payload->data_size);
     send_uint16_t(payload->data_size);  //send the size of the data
-    cdprintf("sending data\n");
+    if (debug) cdprintf("sending data\n");
     burstBytes( payload->data, payload->data_size);  //send the actual data
-    cdprintf("sending data_crc\n");
+    if (debug) cdprintf("sending data_crc\n");
     sendBytes( (uint8_t *) &payload->data_crc, 1);
     ResponseStatus crc_success = receive_response_status();
     return crc_success;
@@ -274,37 +274,37 @@ uint16_t receive_uint16_t() {
 }
 
 ResponseStatus receive_response(Payload *response) {
-    cdprintf("Receiving response\n");
+    if (debug) cdprintf("Receiving response\n");
     receiveBytes( (uint8_t *) &response->protocol, 1);
     receiveBytes( (uint8_t *) &response->command, 1);
-    cdprintf("protocol: %d\n", response->protocol);
+    if (debug) cdprintf("protocol: %d\n", response->protocol);
     response->params_size = receive_uint16_t();
-    cdprintf("params_size: %d\n", response->params_size);
+    if (debug) cdprintf("params_size: %d\n", response->params_size);
     receiveBytes( response->params, response->params_size);
-    cdprintf("Receiving command_crc\n");
+    if (debug) cdprintf("Receiving command_crc\n");
     receiveBytes( (uint8_t *) &response->command_crc, 1);
-    cdprintf("command_crc: %d\n", response->command_crc);
+    if (debug) cdprintf("command_crc: %d\n", response->command_crc);
     if (is_valid_command_crc8(response) ) {
         sendResponseStatus(STATUS_OK);
-        cdprintf("command_crc valid\n");
+        if (debug) cdprintf("command_crc valid\n");
     } else {
         sendResponseStatus(INVALID_CRC);
-        cdprintf("command_crc invalid\n");
+        if (debug) cdprintf("command_crc invalid\n");
         return INVALID_CRC;
     }
-    cdprintf("Receiving data size: %d\n", response->data_size);
+    if (debug) cdprintf("Receiving data size: %d\n", response->data_size);
     response->data_size = receive_uint16_t();    
-    cdprintf("data_size: %d\n", response->data_size);
-    cdprintf("Receiving data\n");
+    if (debug) cdprintf("data_size: %d\n", response->data_size);
+    if (debug) cdprintf("Receiving data\n");
     receiveBytes( response->data, response->data_size);
-    cdprintf("Receiving data_crc\n");
+    if (debug) cdprintf("Receiving data_crc\n");
     receiveBytes( (uint8_t *) &response->data_crc, 1);
     if (is_valid_data_crc8(response) ) {
         sendResponseStatus(STATUS_OK);
-        cdprintf("data_crc valid\n");
+        if (debug) cdprintf("data_crc valid\n");
     } else {
         sendResponseStatus(INVALID_CRC);
-        cdprintf("data_crc invalid\n");
+        if (debug) cdprintf("data_crc invalid\n");
         return INVALID_CRC;
     }
     return STATUS_OK;

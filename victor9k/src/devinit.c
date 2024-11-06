@@ -61,7 +61,7 @@
 #include "../../common/crc8.h"
 
 #pragma data_seg("_CODE")
-bool debug = TRUE;
+bool debug = false;
 static uint8_t portbase;
 static uint8_t partition_number = 0;
 //
@@ -108,16 +108,16 @@ uint16_t deviceInit( void )
     cdprintf("     based on (C) 2014 by Dan Marks and on TU58 by Robert Armstrong\n");
     cdprintf("     with help from an openwatcom driver by Eduardo Casino\n");
 
-    cdprintf("initializing user port\n");
+    if (debug) cdprintf("initializing user port\n");
     ResponseStatus status = initialize_user_port();
     if (status != STATUS_OK) {
-        cdprintf("Error initializing VIA %d\n", status);
+        cdprintf("Error initializing VIA %u\n",(uint16_t) status);
         return status;
     }
-    cdprintf("sending startup handshake\n");
+    if (debug) cdprintf("sending startup handshake\n");
     status = send_startup_handshake();
     if (status != STATUS_OK) {
-        cdprintf("Error sending startup handshake %d\n", status);
+        cdprintf("Error sending startup handshake %u\n", (uint16_t) status);
         return status;
     }
 
@@ -126,7 +126,7 @@ uint16_t deviceInit( void )
         cdprintf("about to parse bpb, ES: %x BX: %x\n", registers.es, registers.bx);
         cdprintf("about to parse bpb, CS: %x DS: %x\n", registers.cs, registers.ds);
         cdprintf("SD: command: %d r_unit: %d\n", fpRequest->r_command, fpRequest->r_unit);
-        cdprintf("SD: dh_num_drives: %d\n", dev_header->dh_num_drives);
+        cdprintf("SD: dh_num_drives: %d\n", (int16_t) dev_header->dh_num_drives);
     }
     char name_buffer[8];  // 7 bytes for the name + 1 byte for the null terminator
     memcpy(name_buffer, (void const *) dev_header->dh_name, 7);
@@ -138,7 +138,9 @@ uint16_t deviceInit( void )
     }
 
     //initialize the BPB table
+    if (debug) cdprintf("SD: initializing BPB table\n");
     for (int i = 0; i < MAX_IMG_FILES; i++) {
+        if (debug) cdprintf("SD: my_bpb_tbl[%d] = &my_bpbs[%d] %X\n", i, i, (uint32_t) &my_bpbs[i]);
         my_bpb_tbl[i] = &my_bpbs[i];
     }
 
@@ -148,40 +150,39 @@ uint16_t deviceInit( void )
 
     char far *bpb_cast_ptr = (char far *)(fpRequest->r_bpbptr);  
 
-    if (debug) cdprintf("gathered bpb_ptr: %x\n", bpb_cast_ptr);
+    if (debug) cdprintf("gathered bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
     /* Parse the options from the CONFIG.SYS file, if any... */
     if (!parse_options((char far *) bpb_cast_ptr)) {
         if (debug) cdprintf("SD: bad options in CONFIG.SYS\n");
         //fpRequest->r_endaddr = MK_FP( getCS(), 0 );
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA ); 
     }
-    if (debug) cdprintf("done parsing bpb_ptr: %x\n", bpb_cast_ptr);
+    if (debug) cdprintf("done parsing bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
 
     /* Try to make contact with the drive... */
     if (debug) cdprintf("SD: initializing drive r_unit: %d, partition_number: %d, my_bpb_ptr: %X\n", 
-        fpRequest->r_unit, partition_number, &my_bpbs[0]);
+       (uint16_t) fpRequest->r_unit, (uint16_t)  partition_number, (uint32_t) &my_bpbs[0]);
 
     Payload initPayload = {0};
     initPayload.protocol = SD_BLOCK_DEVICE;
     initPayload.command = DEVICE_INIT;
     char *char_bpb = (uint8_t *) fpRequest->r_bpbptr;
-    cdprintf("sizeof char_bpb: %d\n", sizeof(char_bpb));
-    initPayload.params_size = sizeof(char_bpb);
+    if (debug) cdprintf("sizeof char_bpb: %u\n", (uint16_t) sizeof(*char_bpb));
+    initPayload.params_size = sizeof(*char_bpb);
     initPayload.params = (uint8_t *)(char_bpb);
     uint8_t data[1] = {0};
     initPayload.data = &data[0];
     initPayload.data_size = sizeof(data);
-    cdprintf("sending data_size: %d\n", initPayload.data_size);
-    cdprintf("sending data '%s'\n", initPayload.data);
+    if (debug) cdprintf("sending data_size: %d\n",(uint16_t)  initPayload.data_size);
     create_payload_crc8(&initPayload);
     ResponseStatus outcome = send_command_payload(&initPayload);
     if (outcome != STATUS_OK) {
-        cdprintf("Error: Failed to send DEVICE_INIT command to SD Block Device %d\n", outcome);
+        cdprintf("Error: Failed to send DEVICE_INIT command to SD Block Device %u\n", (uint16_t) outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
     
     //getting the response from the SD card
-    cdprintf("command sent success, starting receive response\n");
+    if (debug) cdprintf("command sent success, starting receive response\n");
     Payload responsePayload = {0};
     uint8_t response_params[3] = {0};
     responsePayload.params = &response_params[0];
@@ -190,24 +191,24 @@ uint16_t deviceInit( void )
     
     outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
-        cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", outcome);
+        cdprintf("SD Error: Failed to receive response from SD Block Device %u\n", (uint16_t) outcome);
         cdprintf((char *) outcome);
         cdprintf("\n");
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
 
     //parsing the response
-    cdprintf("received response, parsing data\n");
+    if (debug) cdprintf("received response, parsing data\n");
     InitPayload *init_details= (InitPayload *) &responsePayload.data[0];
-    cdprintf("SD: receiving response\n");
+    if (debug) cdprintf("SD: receiving response\n");
 
-    cdprintf("SD: received response, parsing data\n");
-    cdprintf("SD: num_drives: %d\n", init_details->num_units);
+    if (debug) cdprintf("SD: received response, parsing data\n");
+    if (debug) cdprintf("SD: num_drives: %d\n", init_details->num_units);
 
     num_drives = init_details->num_units;
     dev_header->dh_num_drives = num_drives;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
-    bpb near **far my_bpb_tbl_far_ptr = (bpb near **far)MK_FP(registers.cs, (unsigned)&my_bpb_tbl[0]);
+    bpb far *my_bpb_tbl_far_ptr = MK_FP(registers.cs, FP_OFF(&my_bpb_tbl[0]));
     fpRequest->r_bpbptr = (bpb *far) my_bpb_tbl_far_ptr;  // Pass to DOS the far pointer to our array of bpb poitners
     
 
@@ -225,8 +226,10 @@ uint16_t deviceInit( void )
     }
     
     if (debug) {
-        cdprintf("SD: done parsing my_bpb: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
+        cdprintf("SD: done parsing &my_bpbs[0]: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
+        cdprintf("SD: done parsing my_bpbs: = %4x:%4x\n", FP_SEG(my_bpbs), FP_OFF(my_bpbs));
         cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
+        cdprintf("SD: done parsing &my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(0));
         cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
         cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
@@ -253,21 +256,31 @@ uint16_t deviceInit( void )
     if (debug) {   
       cdprintf("SD: BPB data:\n");
       for (int i = 0; i < num_drives; i++) {
+        cdprintf("Drive %c %d\n", (fpRequest->r_firstunit + i + 'A'), i);
+        cdprintf("my_bpb_tbl_far_ptr= %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
+        cdprintf("&my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
+        cdprintf("my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
+        cdprintf("my_bpb_tbl_far_ptr = %4x\n", (uint16_t) my_bpb_tbl_far_ptr);
+        cdprintf("&my_bpb_tbl[%d] FP_SEG = %4x:%4x\n", i, FP_SEG(&my_bpb_tbl[i]), FP_OFF(&my_bpb_tbl[i]));
+        cdprintf("&my_bpb_tbl[%d] = %4x\n", i, (uint16_t) &my_bpb_tbl[i]);
+        cdprintf("&my_bpb_tbl = %4x\n", (uint16_t) &my_bpb_tbl);
+        cdprintf("my_bpb_tbl[0] = %4x\n", (uint16_t) my_bpb_tbl[0]);
+        cdprintf("my_bpbs[%d] = %4x:%4x\n", i, FP_SEG(&my_bpbs[i]), FP_OFF(&my_bpbs[i]));
+        cdprintf("my_bpbs[%d] = %4x\n", i, (uint16_t)  &my_bpbs[i]);
         cdprintf("Drive %c\n", (fpRequest->r_firstunit + i + 'A'));
-        cdprintf("Bytes per Sector: %d\n", my_bpbs[i].bpb_nbyte);
-        cdprintf("Bytes per Sector: %d\n", my_bpb_tbl_far_ptr[i]->bpb_nbyte);
-        cdprintf("Sectors per Allocation Unit: %d\n", my_bpbs[i].bpb_nsector);
-        cdprintf("# Reserved Sectors: %d\n", my_bpbs[i].bpb_nreserved);
-        cdprintf("# FATs: %d\n", my_bpbs[i].bpb_nfat);
-        cdprintf("# Root Directory entries: %d  ", my_bpbs[i].bpb_ndirent);
-        cdprintf("Size in sectors: %d\n", my_bpbs[i].bpb_nsize);
-        cdprintf("MEDIA Descriptor Byte: %x  ", my_bpbs[i].bpb_mdesc);
-        cdprintf("FAT size in sectors: %d\n", my_bpbs[i].bpb_nfsect);
+        cdprintf("Bytes per Sector: %d\n", (uint16_t) my_bpbs[i].bpb_nbyte);
+        cdprintf("Sectors per Allocation Unit: %d\n", (uint16_t) my_bpbs[i].bpb_nsector);
+        cdprintf("# Reserved Sectors: %d\n", (uint16_t) my_bpbs[i].bpb_nreserved);
+        cdprintf("# FATs: %d\n", (uint16_t) my_bpbs[i].bpb_nfat);
+        cdprintf("# Root Directory entries: %d  ", (uint16_t) my_bpbs[i].bpb_ndirent);
+        cdprintf("Size in sectors: %u\n", (uint16_t) my_bpbs[i].bpb_nsize);
+        cdprintf("MEDIA Descriptor Byte: %x  ", (uint16_t) my_bpbs[i].bpb_mdesc);
+        cdprintf("FAT size in sectors: %d\n", (uint16_t) my_bpbs[i].bpb_nfsect);
       }
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(&transient_data));
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(fpRequest->r_endaddr));
     }
-    cdprintf("returing SD_DONE from init()\n");
+    if (debug) cdprintf("returing SD_DONE from init()\n");
   return S_DONE;    
 }
 
@@ -324,10 +337,10 @@ bool parse_options (char far *p)
     case 'P':
         if ((p=option_value(p,&temp)) == FALSE)  return FALSE;
         if ((temp < 1) || (temp > 4))
-            cdprintf("SD: Invalid partition number %d\n",temp);
+            if (debug) cdprintf("SD: Invalid partition number %d\n",temp);
         else
             partition_number = temp;
-            cdprintf("SD: partition number: %d\n", partition_number);
+            if (debug) cdprintf("SD: partition number: %d\n", partition_number);
         break; 
     case 'b': 
     case 'B':
