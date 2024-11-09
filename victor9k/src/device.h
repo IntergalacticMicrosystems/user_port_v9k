@@ -50,6 +50,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "../../common/protocols.h"
+
 /*
  *      Status Word Bits
  */
@@ -389,7 +391,7 @@ typedef struct {
 
 typedef boot super;             /* Alias for boot structure             */
 
-typedef bpb *near bpbtbl_t[];     /*  Array of BPBs     */
+typedef bpb *near bpb_tbl_t[MAX_IMG_FILES];     /*  Array of near pointers to BPBs    */
 
 typedef struct {
   uint8_t r_length;               /*  Request Header length               */
@@ -401,7 +403,7 @@ typedef struct {
     struct {
       uint8_t _r_nunits;          /*  number of units     */
       int8_t __far *_r_endaddr;   /*  Ending Address      */
-      bpb far * _r_bpbptr;     /*  ptr to BPB array    */
+      bpb_tbl_t far * _r_bpb_tbl_ptr;     /*  ptr to BPB array    */
       uint8_t _r_firstunit;
     } _r_init;
     struct {
@@ -412,7 +414,7 @@ typedef struct {
     struct {
       int8_t _r_meddesc;          /*  MEDIA Descriptor    */
       boot __far * _r_fat;        /*  boot sector pointer */
-      bpb __far * _r_bpbpt;       /*  ptr to BPB table    */
+      bpb * _r_bpb_ptr;       /*  ptr to BPB table    */
     } _r_bpb;
     struct {
       int8_t _r_media_desc;       /*  MEDIA Descriptor    */
@@ -452,7 +454,7 @@ typedef struct {
 /* Init packet macros                                                   */
 #define r_nunits        _r_x._r_init._r_nunits
 #define r_endaddr       _r_x._r_init._r_endaddr
-#define r_bpbptr        _r_x._r_init._r_bpbptr
+#define r_bpb_tbl_ptr        _r_x._r_init._r_bpb_tbl_ptr
 #define r_firstunit     _r_x._r_init._r_firstunit
 
 /* MEDIA Check packet macros                                            */
@@ -463,7 +465,7 @@ typedef struct {
 /* Build BPB packet macros                                              */
 #define r_bpmdesc       _r_x._r_bpb._r_meddesc
 #define r_bpfat         _r_x._r_bpb._r_fat
-#define r_bpptr         _r_x._r_bpb._r_bpbpt
+#define r_bpb_ptr         _r_x._r_bpb._r_bpb_ptr
 
 /* rw packet macros                                                     */
 #define r_rw_ptr        _r_x._r_rw
@@ -535,13 +537,27 @@ typedef struct {
 /*
  */
 typedef request __far *rqptr;
-typedef bpb __far *bpbptr;
 typedef int8_t __far *byteptr;
 typedef struct dhdr __far *dhdrptr;
 
 #pragma pack( pop )
 
 static bool parse_options (char far *);
+
+#define SECTOR_SIZE 512                         // sector size in bytes
+#define MAX_RAM_DISK_SIZE_KB 768
+#define MAX_SECTORS_POSSIBLE (MAX_RAM_DISK_SIZE_KB * 1024 / SECTOR_SIZE) //768KB * 1024 / 512 = 1536
+#define MAX_SEGMENTS (MAX_RAM_DISK_SIZE_KB / 64) //64KB segments allocatable by DOS
+
+#define NUM_SECTORS 32
+
+typedef struct {
+    uint8_t data[SECTOR_SIZE];
+} Sector;
+
+typedef struct {
+    Sector sectors[NUM_SECTORS];
+} MiniDrive;
 
 #endif /* _DEVICE_H_ */
 /*

@@ -100,10 +100,6 @@ extern __segment getCS( void );
 #pragma aux getCS = \
     "mov ax, cs";
 
-extern __segment getCS( void );
-#pragma aux getCS = \
-    "mov ax, cs";
-
 extern void get_segments(struct SREGS far *sregs);
 #pragma aux get_segments = \
     "mov ax, cs" \

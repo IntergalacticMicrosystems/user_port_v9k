@@ -107,7 +107,8 @@ struct _bpb {        /* BIOS Parameter block structure...   */
   /* case, the total_sectors field should be zero!       */
   int32_t sector_count;    /*  device size, in sectors      */
 };
-typedef struct _bpb bpb_t;
+
+typedef bpb *near bpb_tbl_t[];     /*  Array of BPBs     */
 
 struct _rhfixed {    /* Fixed preamble for every request... */
   uint8_t length;       /*  length of the header, in uint8_ts  */
@@ -121,12 +122,11 @@ typedef struct _rhfixed rh_t;
 /*   NOTE: count is in _uint8_ts_ for character type device drivers, and   */
 /* in _sectors_ for block type drivers!!           */
 
-typedef near * (bpbtbl_t[]);
 struct _rh_init {    /* INITIALIZATION(0)       */
   rh_t        rh;    /*  fixed portion of the header     */
   uint8_t        nunits;      /*  number of units supported by driver   */
   uint8_t   far *brkadr;      /*  break address (memory used)     */
-  bpbtbl_t far *bpbtbl;    /*  pointer to array of BPBs     */
+  bpb_tbl_t far *bpbtbl;    /*  pointer to array of BPBs     */
   uint8_t        drive;    /*  first available drive number */
 };
 typedef struct _rh_init rh_init_t;

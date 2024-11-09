@@ -61,17 +61,22 @@
 #include "../../common/crc8.h"
 
 #pragma data_seg("_CODE")
-bool debug = false;
+bool debug = true;
 static uint8_t portbase;
 static uint8_t partition_number = 0;
 //
 // Place here any variables or constants that should go away after initialization
 //
 //static char hellomsg[] = "\r\nDOS Device Driver Template in Open Watcom C\r\n$";
+
 extern int8_t num_drives;
+//BPB table is an array of near pointers to an array BPB structures
+//DOS passes around a far pointer to the table
+//these are defined in templace.c to be used in the rest of the code
 extern bpb my_bpbs[MAX_IMG_FILES];  // Array of BPB instances
-extern bpb near *my_bpb_tbl[MAX_IMG_FILES];    // Array of near pointers to BPB structures
-extern bpb far *my_bpb_tbl_far_ptr;   // Far pointer to the BPB table
+extern bpb near *my_bpb_tbl[MAX_IMG_FILES];   // BPB Table = array of near pointers to BPB structures
+extern bpb * __far *my_bpb_tbl_far_ptr;   // Far pointer to the BPB table
+extern MiniDrive myDrive;
 
 extern bool initNeeded;
 
@@ -109,13 +114,14 @@ uint16_t deviceInit( void )
     cdprintf("     with help from an openwatcom driver by Eduardo Casino\n");
 
     if (debug) cdprintf("initializing user port\n");
+    cdprintf("SD:  myDrive = %4x:%4x\n", FP_SEG( &myDrive), FP_OFF( &myDrive));
     ResponseStatus status = initialize_user_port();
     if (status != STATUS_OK) {
         cdprintf("Error initializing VIA %u\n",(uint16_t) status);
         return status;
     }
     if (debug) cdprintf("sending startup handshake\n");
-    status = send_startup_handshake();
+    // status = send_startup_handshake();
     if (status != STATUS_OK) {
         cdprintf("Error sending startup handshake %u\n", (uint16_t) status);
         return status;
@@ -143,12 +149,13 @@ uint16_t deviceInit( void )
         if (debug) cdprintf("SD: my_bpb_tbl[%d] = &my_bpbs[%d] %X\n", i, i, (uint32_t) &my_bpbs[i]);
         my_bpb_tbl[i] = &my_bpbs[i];
     }
+    cdprintf("SD: ramdrive allocation succeeded. Total Size: %d KB\n", (sizeof( myDrive.sectors)/1024));
 
     //DOS is overloading a data structure that in normal use stores the BPB, 
     //for init() it stores the string that sits in config.sys
     //hence I'm casting to a char
 
-    char far *bpb_cast_ptr = (char far *)(fpRequest->r_bpbptr);  
+    char far *bpb_cast_ptr = (char far *)(fpRequest->r_bpb_tbl_ptr);  
 
     if (debug) cdprintf("gathered bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
     /* Parse the options from the CONFIG.SYS file, if any... */
@@ -160,22 +167,27 @@ uint16_t deviceInit( void )
     if (debug) cdprintf("done parsing bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
 
     /* Try to make contact with the drive... */
-    if (debug) cdprintf("SD: initializing drive r_unit: %d, partition_number: %d, my_bpb_ptr: %X\n", 
-       (uint16_t) fpRequest->r_unit, (uint16_t)  partition_number, (uint32_t) &my_bpbs[0]);
+    if (debug) cdprintf("SD: initializing drive r_unit: %u, partition_number: %u, my_bpb_ptr: %4x:%4x\n", 
+       (uint16_t) fpRequest->r_unit, (uint16_t)  partition_number, FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
+
+    if (debug) cdprintf("SD: initializing drive r_unit: %u, &my_bpb_tbl_far_ptr: %4x:%4x, my_bpb_tbl_far_ptr: %4x:%4x\n", 
+       (uint16_t) fpRequest->r_unit, FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr), 
+       FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
 
     Payload initPayload = {0};
     initPayload.protocol = SD_BLOCK_DEVICE;
     initPayload.command = DEVICE_INIT;
-    char *char_bpb = (uint8_t *) fpRequest->r_bpbptr;
+    uint8_t *char_bpb = (uint8_t *) fpRequest->r_bpb_tbl_ptr;
     if (debug) cdprintf("sizeof char_bpb: %u\n", (uint16_t) sizeof(*char_bpb));
     initPayload.params_size = sizeof(*char_bpb);
     initPayload.params = (uint8_t *)(char_bpb);
     uint8_t data[1] = {0};
     initPayload.data = &data[0];
     initPayload.data_size = sizeof(data);
-    if (debug) cdprintf("sending data_size: %d\n",(uint16_t)  initPayload.data_size);
+    if (debug) cdprintf("sending data_size: %d\n", initPayload.data_size);
     create_payload_crc8(&initPayload);
-    ResponseStatus outcome = send_command_payload(&initPayload);
+    //ResponseStatus outcome = send_command_payload(&initPayload);
+    ResponseStatus outcome = STATUS_OK;
     if (outcome != STATUS_OK) {
         cdprintf("Error: Failed to send DEVICE_INIT command to SD Block Device %u\n", (uint16_t) outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
@@ -189,12 +201,52 @@ uint16_t deviceInit( void )
     uint8_t response_data[1520] = {0};
     responsePayload.data = &response_data[0];
     
-    outcome = receive_response(&responsePayload);
+    //outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
         cdprintf("SD Error: Failed to receive response from SD Block Device %u\n", (uint16_t) outcome);
         cdprintf((char *) outcome);
         cdprintf("\n");
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
+    }
+
+    bpb *my_bpb_ptr = &my_bpbs[0]; 
+    
+    my_bpb_ptr->bpb_nbyte = 512;
+    my_bpb_ptr->bpb_nsector = 1;     /* Number of sectors per cluster */
+    my_bpb_ptr->bpb_nreserved = 1;  /* Number of reserved sectors */
+    my_bpb_ptr->bpb_nfat = 2;              /* Number of FAT copies */
+    my_bpb_ptr->bpb_ndirent = 16;   
+    my_bpb_ptr->bpb_nsize = 32;
+    my_bpb_ptr->bpb_mdesc = 0xF8;
+    my_bpb_ptr->bpb_nfsect = 1;             /* Number of sectors per FAT */
+   
+    //set &myDrive.sectors[0] to contain the BpB
+    //configure the empty FAT tables for the RAM drive
+    myDrive.sectors[1].data[0] = 0xF0;
+    myDrive.sectors[1].data[1] = 0xFF;
+    myDrive.sectors[1].data[2] = 0xFF;
+
+    myDrive.sectors[2].data[0] = 0xF0;
+    myDrive.sectors[2].data[1] = 0xFF;
+    myDrive.sectors[2].data[2] = 0xFF;
+
+    uint8_t directory_entry[512] = {
+    0x4D, 0x41, 0x43, 0x48,   0x49, 0x4E, 0x45, 0x31,   0x42, 0x20, 0x20, 0x28,   0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,   0x00, 0x00, 0x6A, 0x91,   0x29, 0x54, 0x00, 0x00,   0x00, 0x00, 0x00, 0x00 };
+
+    // Start filling from the 32nd byte
+    for (uint16_t i = 32; i < 512;) { // Notice the increment part is empty
+        directory_entry[i] = 0x00; // Set the current byte to 0x00
+        i++;
+        for (uint16_t j = 0; j < 31 && i < 512; j++, i++) { // Also check i < 512 to avoid overflow
+            directory_entry[i] = 0x93;
+        }
+        cdprintf("%d ", i);
+
+    }
+
+    for (uint16_t i = 0; i < 512; i++) {
+        myDrive.sectors[3].data[i] = directory_entry[i];
     }
 
     //parsing the response
@@ -205,25 +257,26 @@ uint16_t deviceInit( void )
     if (debug) cdprintf("SD: received response, parsing data\n");
     if (debug) cdprintf("SD: num_drives: %d\n", init_details->num_units);
 
-    num_drives = init_details->num_units;
+    //num_drives = init_details->num_units;
+    num_drives = 1;
     dev_header->dh_num_drives = num_drives;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
     bpb far *my_bpb_tbl_far_ptr = MK_FP(registers.cs, FP_OFF(&my_bpb_tbl[0]));
-    fpRequest->r_bpbptr = (bpb *far) my_bpb_tbl_far_ptr;  // Pass to DOS the far pointer to our array of bpb poitners
+    fpRequest->r_bpb_tbl_ptr = (bpb * __far *) my_bpb_tbl_far_ptr;  // Pass to DOS the far pointer to our array of bpb poitners
     
 
-    //copy the BPB details to the BPB table
-    for (int i = 0; i < num_drives; i++) {
-        const VictorBPB *drive = &init_details->bpb_array[i];
-        my_bpbs[i].bpb_nbyte = drive->bytes_per_sector;  //copy the BPB details to
-        my_bpbs[i].bpb_nsector = drive->sectors_per_cluster;  //the BPB table   
-        my_bpbs[i].bpb_nreserved = drive->reserved_sectors;
-        my_bpbs[i].bpb_nfat = drive->num_fats;
-        my_bpbs[i].bpb_ndirent = drive->root_entry_count;
-        my_bpbs[i].bpb_nsize = drive->total_sectors;
-        my_bpbs[i].bpb_mdesc = drive->media_descriptor;
-        my_bpbs[i].bpb_nfsect = drive->sectors_per_fat;
-    }
+    // //copy the BPB details to the BPB table
+    // for (int i = 0; i < num_drives; i++) {
+    //     const VictorBPB *drive = &init_details->bpb_array[i];
+    //     my_bpbs[i].bpb_nbyte = drive->bytes_per_sector;  //copy the BPB details to
+    //     my_bpbs[i].bpb_nsector = drive->sectors_per_cluster;  //the BPB table   
+    //     my_bpbs[i].bpb_nreserved = drive->reserved_sectors;
+    //     my_bpbs[i].bpb_nfat = drive->num_fats;
+    //     my_bpbs[i].bpb_ndirent = drive->root_entry_count;
+    //     my_bpbs[i].bpb_nsize = drive->total_sectors;
+    //     my_bpbs[i].bpb_mdesc = drive->media_descriptor;
+    //     my_bpbs[i].bpb_nfsect = drive->sectors_per_fat;
+    // }
     
     if (debug) {
         cdprintf("SD: done parsing &my_bpbs[0]: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
@@ -231,7 +284,7 @@ uint16_t deviceInit( void )
         cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing &my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(0));
-        cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
+        //cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
         cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
     }
 
@@ -257,29 +310,24 @@ uint16_t deviceInit( void )
       cdprintf("SD: BPB data:\n");
       for (int i = 0; i < num_drives; i++) {
         cdprintf("Drive %c %d\n", (fpRequest->r_firstunit + i + 'A'), i);
-        cdprintf("my_bpb_tbl_far_ptr= %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("&my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
-        cdprintf("my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
-        cdprintf("my_bpb_tbl_far_ptr = %4x\n", (uint16_t) my_bpb_tbl_far_ptr);
+        cdprintf("my_bpb_tbl_far_ptr= %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("&my_bpb_tbl[%d] FP_SEG = %4x:%4x\n", i, FP_SEG(&my_bpb_tbl[i]), FP_OFF(&my_bpb_tbl[i]));
-        cdprintf("&my_bpb_tbl[%d] = %4x\n", i, (uint16_t) &my_bpb_tbl[i]);
-        cdprintf("&my_bpb_tbl = %4x\n", (uint16_t) &my_bpb_tbl);
-        cdprintf("my_bpb_tbl[0] = %4x\n", (uint16_t) my_bpb_tbl[0]);
+        cdprintf("my_bpb_tbl[%d] = %4x:%4x\n", i, FP_SEG(my_bpb_tbl[i]), FP_OFF(my_bpb_tbl[i]));
         cdprintf("my_bpbs[%d] = %4x:%4x\n", i, FP_SEG(&my_bpbs[i]), FP_OFF(&my_bpbs[i]));
-        cdprintf("my_bpbs[%d] = %4x\n", i, (uint16_t)  &my_bpbs[i]);
-        cdprintf("Drive %c\n", (fpRequest->r_firstunit + i + 'A'));
-        cdprintf("Bytes per Sector: %d\n", (uint16_t) my_bpbs[i].bpb_nbyte);
+        cdprintf("Bytes per Sector: %d\n", my_bpbs[i].bpb_nbyte);
         cdprintf("Sectors per Allocation Unit: %d\n", (uint16_t) my_bpbs[i].bpb_nsector);
-        cdprintf("# Reserved Sectors: %d\n", (uint16_t) my_bpbs[i].bpb_nreserved);
+        cdprintf("# Reserved Sectors: %d\n", my_bpbs[i].bpb_nreserved);
         cdprintf("# FATs: %d\n", (uint16_t) my_bpbs[i].bpb_nfat);
-        cdprintf("# Root Directory entries: %d  ", (uint16_t) my_bpbs[i].bpb_ndirent);
-        cdprintf("Size in sectors: %u\n", (uint16_t) my_bpbs[i].bpb_nsize);
-        cdprintf("MEDIA Descriptor Byte: %x  ", (uint16_t) my_bpbs[i].bpb_mdesc);
-        cdprintf("FAT size in sectors: %d\n", (uint16_t) my_bpbs[i].bpb_nfsect);
+        cdprintf("# Root Directory entries: %d  ", my_bpbs[i].bpb_ndirent);
+        cdprintf("Size in sectors: %u\n", my_bpbs[i].bpb_nsize);
+        cdprintf("MEDIA Descriptor Byte: %x\n", (uint16_t) my_bpbs[i].bpb_mdesc);
+        cdprintf("FAT size in sectors: %u\n", (uint16_t) my_bpbs[i].bpb_nfsect);
       }
-      cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(&transient_data));
+      cdprintf("SD: &transient_data = %4x:%4x\n", FP_SEG(&transient_data), FP_OFF(&transient_data));
       cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(fpRequest->r_endaddr));
     }
+    if (debug) cdprintf("done parsing, CS: %x DS: %x\n", registers.cs, registers.ds);
     if (debug) cdprintf("returing SD_DONE from init()\n");
   return S_DONE;    
 }

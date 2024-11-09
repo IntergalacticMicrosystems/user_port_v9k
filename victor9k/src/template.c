@@ -40,15 +40,23 @@
 static uint8_t our_stack[STACK_SIZE];
 uint8_t *stack_bottom = our_stack + STACK_SIZE;
 uint32_t dos_stack;
+
+#endif // USE_INTERNAL_STACK
+
+
 bool initNeeded = TRUE;
 int8_t num_drives = -1;
+
+//BPB table is an array of near pointers to an array BPB structures
+//DOS passes around a far pointer to the table
 bpb my_bpbs[MAX_IMG_FILES] = {0};  // Array of BPB instances
-bpb near *my_bpb_tbl[MAX_IMG_FILES];    // Array of near pointers to BPB structures
-bpb *far my_bpb_tbl_far_ptr = (bpb *far)my_bpb_tbl;   // Far pointer to the BPB table
+bpb near *my_bpb_tbl[MAX_IMG_FILES] = {NULL};     // BPB Table = array of near pointers to BPB structures
+bpb * __far *my_bpb_tbl_far_ptr = (bpb * __far *)my_bpb_tbl;   // Far pointer to the BPB table
+MiniDrive myDrive = {0};
 
 extern bool debug;
 
-#endif // USE_INTERNAL_STACK
+
 
 request __far *fpRequest = (request __far *)0;
 
@@ -72,9 +80,13 @@ static uint16_t mediaCheck (void)
   struct ALL_REGS registers;
   get_all_registers(&registers);
   // mediaCheck_data far *media_ptr;
+  uint8_t drive_num = fpRequest->r_unit;
   if (debug) cdprintf("SD: mediaCheck()\n");
   if (debug) cdprintf("about to parse mediaCheck, ES: %x BX: %x\n", registers.es, registers.bx);
   if (debug) cdprintf("SD: mediaCheck: unit=%x\n", fpRequest->r_unit);
+  if (debug) cdprintf("SD: mediaCheck: fpRequest=%x:%x\n", FP_SEG(fpRequest), FP_OFF(fpRequest));
+  if (debug) cdprintf("SD: mediaCheck: &my_bpb_tbl[0]=%x:%x\n", FP_SEG(&my_bpb_tbl[drive_num]), FP_OFF(&my_bpb_tbl[drive_num]));
+  
   
   if (debug) cdprintf("SD: mediaCheck(): r_unit 0x%2xh media_descriptor = 0x%2xh r_mc_red_code: %d fpRequest: %x:%x\n", 
     fpRequest->r_unit, fpRequest->r_mc_media_desc, M_NOT_CHANGED,
@@ -93,14 +105,19 @@ static uint16_t mediaCheck (void)
 static uint16_t buildBpb (void)
 {
   if (debug) cdprintf("SD: buildBpb()\n");
+  uint8_t drive_num = fpRequest->r_unit;
+  uint8_t media_descriiptor = fpRequest->r_bpmdesc;
   // if (debug)
-     cdprintf("SD: buildBpb: unit=%x\n", fpRequest->r_bpmdesc);
-  uint32_t bpb_start = calculateLinearAddress(FP_SEG(fpRequest->r_bpptr) , FP_OFF(fpRequest->r_bpptr));
-  if (debug) cdprintf("SD: buildBpb(): media_descriptor=0x%2xh r_bpfat: %x:%x r_bpptr: %x:%x %5X", 
-      fpRequest->r_bpmdesc, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
-      FP_SEG(fpRequest->r_bpptr), FP_OFF(fpRequest->r_bpptr), bpb_start);
+     cdprintf("SD: buildBpb: unit=%x\n", drive_num);
+  if (debug) cdprintf("SD: buildBpb: fpRequest=%x:%x\n", FP_SEG(fpRequest), FP_OFF(fpRequest));
+  if (debug) cdprintf("SD: buildBpb: &my_bpb_tbl[0]=%x:%x\n", FP_SEG(&my_bpb_tbl[0]), FP_OFF(&my_bpb_tbl[0]));
+  
+  if (debug) cdprintf("SD: buildBpb(): media_descriptor=0x%2xh r_bpfat: %x:%x r_bpb_ptr: %x:%x my_bpb: %x:%x\n", 
+      media_descriiptor, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
+      FP_SEG(fpRequest->r_bpb_ptr), FP_OFF(fpRequest->r_bpb_ptr),
+      FP_SEG(&my_bpb_tbl[drive_num]), FP_OFF(&my_bpb_tbl[drive_num]));
   //we build the BPB during the deviceInit() method. just return pointer to built table
-  fpRequest->r_bpptr = my_bpb_tbl_far_ptr;
+  fpRequest->r_bpb_ptr = (bpb *)my_bpb_tbl[drive_num];
 
   return S_DONE;
 }
@@ -222,7 +239,8 @@ static uint16_t readBlock (void)
       readParams.sector_count = sector_count;
       readParams.start_sector = start_sector;
       create_payload_crc8(&readPayload);
-      ResponseStatus outcome = send_command_payload(&readPayload);
+      //ResponseStatus outcome = send_command_payload(&readPayload);
+      ResponseStatus outcome = STATUS_OK;
       if (outcome != STATUS_OK) {
           cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %d\n",(uint16_t) outcome);
           return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
@@ -236,11 +254,21 @@ static uint16_t readBlock (void)
       responsePayload.params = &response_params[0];
       responsePayload.data = transfer_area;
       responsePayload.data_size = sector_count * SECTOR_SIZE;
-      outcome = receive_response(&responsePayload);
+      //outcome = receive_response(&responsePayload);
       if (outcome != STATUS_OK) {
           cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", (uint16_t) outcome);
           return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
       }
+
+  //return data from RAM drive
+  Sector *startSector = &myDrive.sectors[start_sector]; 
+
+  // Calculate the number of bytes to copy
+  unsigned int numBytes = SECTOR_SIZE * sector_count;
+
+  // Perform the copy
+  _fmemcpy(fpRequest->r_trans, startSector, numBytes);
+
     return (S_DONE);
 }
 
