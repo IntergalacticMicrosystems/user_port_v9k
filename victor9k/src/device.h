@@ -414,7 +414,7 @@ typedef struct {
     struct {
       int8_t _r_meddesc;          /*  MEDIA Descriptor    */
       boot __far * _r_fat;        /*  boot sector pointer */
-      bpb * _r_bpb_ptr;       /*  ptr to BPB table    */
+      bpb __far * _r_bpb_ptr;           /*  ptr to BPB table    */
     } _r_bpb;
     struct {
       int8_t _r_media_desc;       /*  MEDIA Descriptor    */

@@ -167,18 +167,26 @@ uint16_t deviceInit( void )
     if (debug) cdprintf("done parsing bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
 
     /* Try to make contact with the drive... */
-    if (debug) cdprintf("SD: initializing drive r_unit: %u, partition_number: %u, my_bpb_ptr: %4x:%4x\n", 
-       (uint16_t) fpRequest->r_unit, (uint16_t)  partition_number, FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
+    if (debug) cdprintf("SD: initializing drive r_unit: %u\n", (uint16_t) fpRequest->r_unit);
+    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
 
-    if (debug) cdprintf("SD: initializing drive r_unit: %u, &my_bpb_tbl_far_ptr: %4x:%4x, my_bpb_tbl_far_ptr: %4x:%4x\n", 
-       (uint16_t) fpRequest->r_unit, FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr), 
+    if (debug) cdprintf("SD: initializing drive &my_bpb_tbl_far_ptr: %4x:%4x, my_bpb_tbl_far_ptr: %4x:%4x\n", 
+       FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr), 
        FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
 
+    if (debug) cdprintf("SD: initializing drive &my_bpb_tbl[0]: %4x:%4x, my_bpb_tbl[0]: %4x:%4x\n", 
+       FP_SEG(&my_bpb_tbl[0]), FP_OFF(&my_bpb_tbl[0]), 
+       FP_SEG(my_bpb_tbl[0]), FP_OFF(my_bpb_tbl[0]));
+
+    if (debug) cdprintf("SD: initializing drive &my_bpbs[0]: %4x:%4x\n", 
+       FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
+    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     Payload initPayload = {0};
     initPayload.protocol = SD_BLOCK_DEVICE;
     initPayload.command = DEVICE_INIT;
     uint8_t *char_bpb = (uint8_t *) fpRequest->r_bpb_tbl_ptr;
     if (debug) cdprintf("sizeof char_bpb: %u\n", (uint16_t) sizeof(*char_bpb));
+    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     initPayload.params_size = sizeof(*char_bpb);
     initPayload.params = (uint8_t *)(char_bpb);
     uint8_t data[1] = {0};
@@ -195,6 +203,7 @@ uint16_t deviceInit( void )
     
     //getting the response from the SD card
     if (debug) cdprintf("command sent success, starting receive response\n");
+    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     Payload responsePayload = {0};
     uint8_t response_params[3] = {0};
     responsePayload.params = &response_params[0];
@@ -233,7 +242,7 @@ uint16_t deviceInit( void )
     uint8_t directory_entry[512] = {
     0x4D, 0x41, 0x43, 0x48,   0x49, 0x4E, 0x45, 0x31,   0x42, 0x20, 0x20, 0x28,   0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00,   0x00, 0x00, 0x6A, 0x91,   0x29, 0x54, 0x00, 0x00,   0x00, 0x00, 0x00, 0x00 };
-
+    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     // Start filling from the 32nd byte
     for (uint16_t i = 32; i < 512;) { // Notice the increment part is empty
         directory_entry[i] = 0x00; // Set the current byte to 0x00
@@ -244,11 +253,11 @@ uint16_t deviceInit( void )
         cdprintf("%d ", i);
 
     }
-
+    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     for (uint16_t i = 0; i < 512; i++) {
         myDrive.sectors[3].data[i] = directory_entry[i];
     }
-
+    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     //parsing the response
     if (debug) cdprintf("received response, parsing data\n");
     InitPayload *init_details= (InitPayload *) &responsePayload.data[0];
@@ -280,10 +289,9 @@ uint16_t deviceInit( void )
     
     if (debug) {
         cdprintf("SD: done parsing &my_bpbs[0]: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
-        cdprintf("SD: done parsing my_bpbs: = %4x:%4x\n", FP_SEG(my_bpbs), FP_OFF(my_bpbs));
-        cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing &my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
-        cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(0));
+        cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
+        cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(registers.ds));
         //cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
         cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
     }
