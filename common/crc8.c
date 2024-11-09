@@ -9,13 +9,13 @@
 #ifdef __WATCOMC__
     // Code specific to OpenWatcom C compiler
     #include "cprint.h"     /* Console printing direct to hardware */
+    extern bool debug;
 #endif
 
 #ifdef __GNUC__
     #include <stdio.h>
 
     bool debug = false;
-
     // Code specific to GNU ARM compiler (GCC)
     void cdprintf (char *msg, ...) {
         printf(msg);
@@ -24,6 +24,7 @@
 
 uint8_t crc8_table[256];
 bool initialized = false;
+
 
 void generate_crc8_table() {
     for (int i = 0; i < 256; i++) {
