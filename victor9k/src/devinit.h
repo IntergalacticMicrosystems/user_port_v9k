@@ -28,6 +28,10 @@ extern bool debug;
 extern uint16_t deviceInit( void );
 extern struct device_header far *dev_header;
 
+uint16_t deviceInit( void );
+
+#ifdef RAMDRIVE
+
 //used for RAMdrive version
 extern int alloc_memory(uint16_t paragraphs, uint16_t *segment);
 #pragma aux alloc_memory =    \
@@ -43,5 +47,6 @@ extern int alloc_memory(uint16_t paragraphs, uint16_t *segment);
     parm [bx] [si]            \
     value [dx]                \
     modify [ax dx];
+#endif
 
 #endif /* _DEVINIT_H_ */

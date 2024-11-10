@@ -43,6 +43,7 @@ uint32_t dos_stack;
 
 #endif // USE_INTERNAL_STACK
 
+static bool validate_far_ptr(void far *ptr, size_t size);
 
 bool initNeeded = TRUE;
 int8_t num_drives = -1;
@@ -52,7 +53,10 @@ int8_t num_drives = -1;
 bpb my_bpbs[MAX_IMG_FILES] = {0};  // Array of BPB instances
 bpb near *my_bpb_tbl[MAX_IMG_FILES] = {NULL};     // BPB Table = array of near pointers to BPB structures
 bpb * __far *my_bpb_tbl_far_ptr = (bpb * __far *)my_bpb_tbl;   // Far pointer to the BPB table
+
+#ifdef RAMDRIVE
 MiniDrive myDrive = {0};
+#endif
 
 extern bool debug;
 
@@ -218,6 +222,12 @@ static uint16_t readBlock (void)
     uint16_t start_sector = fpRequest->r_start;
     uint8_t media_descriptor = fpRequest->r_meddesc;
     uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
+
+    // Validate the transfer buffer
+    if (!validate_far_ptr(transfer_area, sector_count * SECTOR_SIZE)) {
+        if (debug) cdprintf("SD: Invalid transfer buffer address\n");
+        return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
+    }
     if (debug) {
       if (debug) cdprintf("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
        (uint16_t) media_descriptor, start_sector, sector_count, 
@@ -248,8 +258,8 @@ static uint16_t readBlock (void)
       readParams.sector_count = sector_count;
       readParams.start_sector = start_sector;
       create_payload_crc8(&readPayload);
-      //ResponseStatus outcome = send_command_payload(&readPayload);
-      ResponseStatus outcome = STATUS_OK;
+      
+      ResponseStatus outcome = send_command_payload(&readPayload);
       if (outcome != STATUS_OK) {
           cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %d\n",(uint16_t) outcome);
           return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
@@ -263,21 +273,23 @@ static uint16_t readBlock (void)
       responsePayload.params = &response_params[0];
       responsePayload.data = transfer_area;
       responsePayload.data_size = sector_count * SECTOR_SIZE;
-      //outcome = receive_response(&responsePayload);
+      outcome = receive_response(&responsePayload);
       if (outcome != STATUS_OK) {
           cdprintf("SD Error: Failed to receive response from SD Block Device %d\n", (uint16_t) outcome);
           return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
       }
 
-  //return data from RAM drive
-  Sector *startSector = &myDrive.sectors[start_sector]; 
+    #ifdef RAMDRIVE
+    //return data from RAM drive
+    Sector *startSector = &myDrive.sectors[start_sector]; 
 
-  // Calculate the number of bytes to copy
-  unsigned int numBytes = SECTOR_SIZE * sector_count;
+    // Calculate the number of bytes to copy
+    unsigned int numBytes = SECTOR_SIZE * sector_count;
 
-  // Perform the copy
-  _fmemcpy(fpRequest->r_trans, startSector, numBytes);
-
+    // Perform the copy
+    _fmemcpy(fpRequest->r_trans, startSector, numBytes);
+    #endif
+    
     return (S_DONE);
 }
 
@@ -327,8 +339,8 @@ static uint16_t write_block (bool verify)
     
     if (debug) cdprintf("sending data_size: %u\n", (uint16_t) writePayload.data_size);
     create_payload_crc8(&writePayload);
-    ResponseStatus outcome = STATUS_OK;
-    //ResponseStatus outcome = send_command_payload(&writePayload);
+
+    ResponseStatus outcome = send_command_payload(&writePayload);
     if (outcome != STATUS_OK) {
         cdprintf("Error: Failed to send READ_BLOCK command to SD Block Device. Outcome: %u\n", (uint16_t) outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
@@ -342,17 +354,19 @@ static uint16_t write_block (bool verify)
     responsePayload.params = &response_params[0];
     responsePayload.data = transfer_area;
     responsePayload.data_size = sector_count * SECTOR_SIZE;
-    //outcome = receive_response(&responsePayload);
+    outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
         cdprintf("SD Error: Failed to receive response from SD Block Device %u\n", (uint16_t) outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
 
+    #ifdef RAMDRIVE
     unsigned int numBytes = SECTOR_SIZE * sector_count;
     Sector *startSector = &myDrive.sectors[start_sector];
 
     // Perform the copy from the DOS buffer to the MiniDrive
     _fmemcpy(startSector->data, fpRequest->r_trans, numBytes);
+    #endif
 
   return (S_DONE);
 }
@@ -455,3 +469,7 @@ void __far DeviceStrategy( request __far *req )
 
 }
 
+static bool validate_far_ptr(void far *ptr, size_t size) {
+    uint32_t linear_addr = (FP_SEG(ptr) << 4) + FP_OFF(ptr);
+    return linear_addr + size <= 0x100000;  // Below 1MB
+}

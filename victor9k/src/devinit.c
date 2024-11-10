@@ -60,6 +60,8 @@
 #include "../../common/dos_device_payloads.h"
 #include "../../common/crc8.h"
 
+static bool validate_far_ptr(void far *ptr, size_t size); // Function to validate a far pointer
+
 #pragma data_seg("_CODE")
 bool debug = true;
 static uint8_t portbase;
@@ -76,9 +78,11 @@ extern int8_t num_drives;
 extern bpb my_bpbs[MAX_IMG_FILES];  // Array of BPB instances
 extern bpb near *my_bpb_tbl[MAX_IMG_FILES];   // BPB Table = array of near pointers to BPB structures
 extern bpb * __far *my_bpb_tbl_far_ptr;   // Far pointer to the BPB table
-extern MiniDrive myDrive;
-
 extern bool initNeeded;
+
+#ifdef RAMDRIVE
+extern MiniDrive myDrive;
+#endif
 
 
 /*   WARNING!!  WARNING!!  WARNING!!  WARNING!!  WARNING!!  WARNING!!   */
@@ -101,8 +105,7 @@ extern bool initNeeded;
 /* and make contact with the SD card, and then return a table of BPBs to   */
 /* DOS.  If we can't communicate with the drive, then the entire driver */
 /* is unloaded from memory.                  */
-uint16_t deviceInit( void )
-{
+uint16_t deviceInit( void ) {
     struct ALL_REGS registers;
     get_all_registers(&registers);
 
@@ -114,14 +117,18 @@ uint16_t deviceInit( void )
     cdprintf("     with help from an openwatcom driver by Eduardo Casino\n");
 
     if (debug) cdprintf("initializing user port\n");
+    
+    #ifdef RAMDRIVE
     cdprintf("SD:  myDrive = %4x:%4x\n", FP_SEG( &myDrive), FP_OFF( &myDrive));
+    #endif
+
     ResponseStatus status = initialize_user_port();
     if (status != STATUS_OK) {
         cdprintf("Error initializing VIA %u\n",(uint16_t) status);
         return status;
     }
     if (debug) cdprintf("sending startup handshake\n");
-    // status = send_startup_handshake();
+    status = send_startup_handshake();
     if (status != STATUS_OK) {
         cdprintf("Error sending startup handshake %u\n", (uint16_t) status);
         return status;
@@ -149,7 +156,10 @@ uint16_t deviceInit( void )
         if (debug) cdprintf("SD: my_bpb_tbl[%d] = &my_bpbs[%d] %X\n", i, i, (uint32_t) &my_bpbs[i]);
         my_bpb_tbl[i] = &my_bpbs[i];
     }
+
+    #ifdef RAMDRIVE
     cdprintf("SD: ramdrive allocation succeeded. Total Size: %d KB\n", (sizeof( myDrive.sectors)/1024));
+    #endif
 
     //DOS is overloading a data structure that in normal use stores the BPB, 
     //for init() it stores the string that sits in config.sys
@@ -194,8 +204,8 @@ uint16_t deviceInit( void )
     initPayload.data_size = sizeof(data);
     if (debug) cdprintf("sending data_size: %d\n", initPayload.data_size);
     create_payload_crc8(&initPayload);
-    //ResponseStatus outcome = send_command_payload(&initPayload);
-    ResponseStatus outcome = STATUS_OK;
+
+    ResponseStatus outcome = send_command_payload(&initPayload);
     if (outcome != STATUS_OK) {
         cdprintf("Error: Failed to send DEVICE_INIT command to SD Block Device %u\n", (uint16_t) outcome);
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
@@ -210,7 +220,7 @@ uint16_t deviceInit( void )
     uint8_t response_data[1520] = {0};
     responsePayload.data = &response_data[0];
     
-    //outcome = receive_response(&responsePayload);
+    outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
         cdprintf("SD Error: Failed to receive response from SD Block Device %u\n", (uint16_t) outcome);
         cdprintf((char *) outcome);
@@ -229,6 +239,7 @@ uint16_t deviceInit( void )
     my_bpb_ptr->bpb_mdesc = 0xF8;
     my_bpb_ptr->bpb_nfsect = 1;             /* Number of sectors per FAT */
    
+    #ifdef RAMDRIVE
     //set &myDrive.sectors[0] to contain the BpB
     //configure the empty FAT tables for the RAM drive
     myDrive.sectors[1].data[0] = 0xF0;
@@ -257,6 +268,7 @@ uint16_t deviceInit( void )
     for (uint16_t i = 0; i < 512; i++) {
         myDrive.sectors[3].data[i] = directory_entry[i];
     }
+    #endif
     if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     //parsing the response
     if (debug) cdprintf("received response, parsing data\n");
@@ -266,33 +278,36 @@ uint16_t deviceInit( void )
     if (debug) cdprintf("SD: received response, parsing data\n");
     if (debug) cdprintf("SD: num_drives: %d\n", init_details->num_units);
 
-    //num_drives = init_details->num_units;
-    num_drives = 1;
+    num_drives = init_details->num_units;
     dev_header->dh_num_drives = num_drives;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
     bpb far *my_bpb_tbl_far_ptr = MK_FP(registers.cs, FP_OFF(&my_bpb_tbl[0]));
+
+    if (!validate_far_ptr(my_bpb_tbl_far_ptr, (sizeof(my_bpb_tbl[0])*num_drives))) {
+        if (debug) cdprintf("SD: my_bpb_tbl_far_ptr address\n");
+        return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
+    }
     fpRequest->r_bpb_tbl_ptr = (bpb * __far *) my_bpb_tbl_far_ptr;  // Pass to DOS the far pointer to our array of bpb poitners
     
 
-    // //copy the BPB details to the BPB table
-    // for (int i = 0; i < num_drives; i++) {
-    //     const VictorBPB *drive = &init_details->bpb_array[i];
-    //     my_bpbs[i].bpb_nbyte = drive->bytes_per_sector;  //copy the BPB details to
-    //     my_bpbs[i].bpb_nsector = drive->sectors_per_cluster;  //the BPB table   
-    //     my_bpbs[i].bpb_nreserved = drive->reserved_sectors;
-    //     my_bpbs[i].bpb_nfat = drive->num_fats;
-    //     my_bpbs[i].bpb_ndirent = drive->root_entry_count;
-    //     my_bpbs[i].bpb_nsize = drive->total_sectors;
-    //     my_bpbs[i].bpb_mdesc = drive->media_descriptor;
-    //     my_bpbs[i].bpb_nfsect = drive->sectors_per_fat;
-    // }
+    //copy the BPB details to the BPB table
+    for (int i = 0; i < num_drives; i++) {
+        const VictorBPB *drive = &init_details->bpb_array[i];
+        my_bpbs[i].bpb_nbyte = drive->bytes_per_sector;  //copy the BPB details to
+        my_bpbs[i].bpb_nsector = drive->sectors_per_cluster;  //the BPB table   
+        my_bpbs[i].bpb_nreserved = drive->reserved_sectors;
+        my_bpbs[i].bpb_nfat = drive->num_fats;
+        my_bpbs[i].bpb_ndirent = drive->root_entry_count;
+        my_bpbs[i].bpb_nsize = drive->total_sectors;
+        my_bpbs[i].bpb_mdesc = drive->media_descriptor;
+        my_bpbs[i].bpb_nfsect = drive->sectors_per_fat;
+    }
     
     if (debug) {
         cdprintf("SD: done parsing &my_bpbs[0]: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
         cdprintf("SD: done parsing &my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(registers.ds));
-        //cdprintf("SD: done parsing getCS() = %4x:%4x\n", FP_SEG(getCS()), FP_OFF(&transient_data));
         cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
     }
 
@@ -341,12 +356,14 @@ uint16_t deviceInit( void )
 }
 
 /* iseol - return TRUE if ch is any end of line character */
-bool iseol (char ch)
-{  return ch=='\0' || ch=='\r' || ch=='\n';  }
+bool iseol (char ch) {
+      return ch=='\0' || ch=='\r' || ch=='\n';  
+}
 
 /* spanwhite - skip any white space characters in the string */
-char far *spanwhite (char far *p)
-{  while (*p==' ' || *p=='\t') ++p;  return p;  }
+char far *spanwhite (char far *p) {
+      while (*p==' ' || *p=='\t') ++p;  return p;  
+}
 
 /* option_value */
 /*   This routine will parse the "=nnn" part of an option.  It should   */
@@ -354,8 +371,7 @@ char far *spanwhite (char far *p)
 /* acter.  If all is well, it will return the binary value of the arg-  */
 /* ument and a pointer to the first non-numeric character.  If there is */
 /* a syntax error, then it will return NULL.          */
-char far *option_value (char far *p, uint16_t far *v)
-{
+char far *option_value (char far *p, uint16_t far *v) {
   bool null = TRUE;
   if (*p++ != '=')  return FALSE;
   for (*v=0;  *p>='0' && *p<='9';  ++p)
@@ -371,8 +387,7 @@ char far *option_value (char far *p, uint16_t far *v)
 /* acter after "DEVICE=", so we have to first skip over our own file */
 /* name by searching for a blank.  All the option values are stored in  */
 /* global variables (e.g. DrivePort, DriveBaud, etc).          */
-bool parse_options (char far *p)
-{
+bool parse_options (char far *p) {
   uint16_t temp;
   while (*p!=' ' && *p!='\t' && !iseol(*p))  ++p;
   p = spanwhite(p);
@@ -420,4 +435,7 @@ bool parse_options (char far *p)
 return TRUE;
 }
 
-
+static bool validate_far_ptr(void far *ptr, size_t size) {
+    uint32_t linear_addr = (FP_SEG(ptr) << 4) + FP_OFF(ptr);
+    return linear_addr + size <= 0x100000;  // Below 1MB
+}
