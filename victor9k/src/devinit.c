@@ -139,11 +139,10 @@ uint16_t deviceInit( void ) {
         cdprintf("about to parse bpb, ES: %x BX: %x\n", registers.es, registers.bx);
         cdprintf("about to parse bpb, CS: %x DS: %x\n", registers.cs, registers.ds);
         cdprintf("SD: command: %d r_unit: %d\n", fpRequest->r_command, fpRequest->r_unit);
-        cdprintf("SD: dh_num_drives: %d\n", (int16_t) dev_header->dh_num_drives);
     }
-    char name_buffer[8];  // 7 bytes for the name + 1 byte for the null terminator
-    memcpy(name_buffer, (void const *) dev_header->dh_name, 7);
-    name_buffer[7] = '\0';
+    char name_buffer[9];  // 8 bytes for the name + 1 byte for the null terminator
+    memcpy(name_buffer, (void const *) dev_header->dh_name, 8);
+    name_buffer[8] = '\0';
 
     if (debug) {
         cdprintf("SD: dh_name: %s\n", name_buffer);
@@ -171,7 +170,6 @@ uint16_t deviceInit( void ) {
     /* Parse the options from the CONFIG.SYS file, if any... */
     if (!parse_options((char far *) bpb_cast_ptr)) {
         if (debug) cdprintf("SD: bad options in CONFIG.SYS\n");
-        //fpRequest->r_endaddr = MK_FP( getCS(), 0 );
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA ); 
     }
     if (debug) cdprintf("done parsing bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
@@ -279,7 +277,6 @@ uint16_t deviceInit( void ) {
     if (debug) cdprintf("SD: num_drives: %d\n", init_details->num_units);
 
     num_drives = init_details->num_units;
-    dev_header->dh_num_drives = num_drives;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
     bpb far *my_bpb_tbl_far_ptr = MK_FP(registers.cs, FP_OFF(&my_bpb_tbl[0]));
 
@@ -308,7 +305,7 @@ uint16_t deviceInit( void ) {
         cdprintf("SD: done parsing &my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(registers.ds));
-        cdprintf("SD: dh_num_drives: %x r_unit: %x\n", dev_header->dh_num_drives, fpRequest->r_unit);
+        cdprintf("SD: r_unit: %x\n", fpRequest->r_unit);
     }
 
     uint32_t bpb_start = calculateLinearAddress(FP_SEG(my_bpb_tbl_far_ptr) , FP_OFF(my_bpb_tbl_far_ptr));

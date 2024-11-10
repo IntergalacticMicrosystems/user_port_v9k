@@ -151,7 +151,6 @@ struct device_header {
   uint16_t dh_attr;
   void(near *dh_strategy) (void);
   void(near *dh_interrupt) (void);
-  uint8_t dh_num_drives;
   uint8_t dh_name[7];
 };
 
