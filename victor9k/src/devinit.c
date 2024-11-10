@@ -63,6 +63,11 @@
 static bool validate_far_ptr(void far *ptr, size_t size); // Function to validate a far pointer
 
 #pragma data_seg("_CODE")
+//((7*16 + 3*8 +32) * 9 + 1)  (size of VictorBPB) * MAX_DRIVES + 1 for num_units
+//my math doesn't match the compiler's math, so I'm going to use the compiler's math
+//1711 is observed from running on the Victor9K.
+#define MAX_INIT_PAYLOAD_SIZE 1711  
+
 bool debug = true;
 static uint8_t portbase;
 static uint8_t partition_number = 0;
@@ -192,11 +197,9 @@ uint16_t deviceInit( void ) {
     Payload initPayload = {0};
     initPayload.protocol = SD_BLOCK_DEVICE;
     initPayload.command = DEVICE_INIT;
-    uint8_t *char_bpb = (uint8_t *) fpRequest->r_bpb_tbl_ptr;
-    if (debug) cdprintf("sizeof char_bpb: %u\n", (uint16_t) sizeof(*char_bpb));
-    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
-    initPayload.params_size = sizeof(*char_bpb);
-    initPayload.params = (uint8_t *)(char_bpb);
+    uint8_t init_params[1] = {0};
+    initPayload.params_size = sizeof(init_params);
+    initPayload.params = &init_params[0];
     uint8_t data[1] = {0};
     initPayload.data = &data[0];
     initPayload.data_size = sizeof(data);
@@ -215,7 +218,14 @@ uint16_t deviceInit( void ) {
     Payload responsePayload = {0};
     uint8_t response_params[3] = {0};
     responsePayload.params = &response_params[0];
-    uint8_t response_data[1520] = {0};
+    uint16_t data_size = (sizeof(InitPayload) * MAX_IMG_FILES) + 1;
+
+    if (debug) cdprintf("SD: data_size: %u MAX_INIT_PAYLOAD_SIZE: %u\n", data_size, MAX_INIT_PAYLOAD_SIZE);
+    if (data_size != MAX_INIT_PAYLOAD_SIZE) {
+        if (debug) cdprintf("SD: data_size != MAX_INIT_PAYLOAD_SIZE, sizeof(InitPayload) has changed\n");
+        return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
+    }
+    uint8_t response_data[MAX_INIT_PAYLOAD_SIZE] = {0};
     responsePayload.data = &response_data[0];
     
     outcome = receive_response(&responsePayload);
@@ -226,6 +236,7 @@ uint16_t deviceInit( void ) {
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA );
     }
 
+    #ifdef RAMDRIVE
     bpb *my_bpb_ptr = &my_bpbs[0]; 
     
     my_bpb_ptr->bpb_nbyte = 512;
@@ -237,7 +248,7 @@ uint16_t deviceInit( void ) {
     my_bpb_ptr->bpb_mdesc = 0xF8;
     my_bpb_ptr->bpb_nfsect = 1;             /* Number of sectors per FAT */
    
-    #ifdef RAMDRIVE
+    
     //set &myDrive.sectors[0] to contain the BpB
     //configure the empty FAT tables for the RAM drive
     myDrive.sectors[1].data[0] = 0xF0;
@@ -267,14 +278,19 @@ uint16_t deviceInit( void ) {
         myDrive.sectors[3].data[i] = directory_entry[i];
     }
     #endif
+
     if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     //parsing the response
     if (debug) cdprintf("received response, parsing data\n");
     InitPayload *init_details= (InitPayload *) &responsePayload.data[0];
-    if (debug) cdprintf("SD: receiving response\n");
-
+    if (sizeof(init_details) > sizeof(InitPayload)) {
+        if (debug) cdprintf("SD: sizeof(init_details) > sizeof(InitPayload)\n");
+        if (debug) cdprintf("SD: sizeof(init_details): %u sizeof(InitPayload): %u\n", sizeof(init_details), sizeof(InitPayload));
+        return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
+    }
     if (debug) cdprintf("SD: received response, parsing data\n");
     if (debug) cdprintf("SD: num_drives: %d\n", init_details->num_units);
+    if (debug) cdprintf("SD: sizeof(init_details): %u\n", sizeof(init_details));
 
     num_drives = init_details->num_units;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
@@ -334,7 +350,7 @@ uint16_t deviceInit( void ) {
         cdprintf("my_bpb_tbl_far_ptr= %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
         cdprintf("&my_bpb_tbl[%d] FP_SEG = %4x:%4x\n", i, FP_SEG(&my_bpb_tbl[i]), FP_OFF(&my_bpb_tbl[i]));
         cdprintf("my_bpb_tbl[%d] = %4x:%4x\n", i, FP_SEG(my_bpb_tbl[i]), FP_OFF(my_bpb_tbl[i]));
-        cdprintf("my_bpbs[%d] = %4x:%4x\n", i, FP_SEG(&my_bpbs[i]), FP_OFF(&my_bpbs[i]));
+        cdprintf("&my_bpbs[%d] = %4x:%4x\n", i, FP_SEG(&my_bpbs[i]), FP_OFF(&my_bpbs[i]));
         cdprintf("Bytes per Sector: %d\n", my_bpbs[i].bpb_nbyte);
         cdprintf("Sectors per Allocation Unit: %d\n", (uint16_t) my_bpbs[i].bpb_nsector);
         cdprintf("# Reserved Sectors: %d\n", my_bpbs[i].bpb_nreserved);
