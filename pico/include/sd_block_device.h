@@ -6,10 +6,15 @@
 #include "../sdio-fatfs/src/ff15/source/ff.h"
 
 typedef struct {
+    FIL *img_file;
+    uint32_t start_lba;
+} DriveImage;
+
+typedef struct {
     char file_names[MAX_IMG_FILES][FILENAME_MAX_LENGTH];
     int fileCount;
     FATFS *fs;
-    FIL *img_file[MAX_IMG_FILES];
+    DriveImage *images[MAX_IMG_FILES];
     FIL *debug_log;
 } SDState;
 

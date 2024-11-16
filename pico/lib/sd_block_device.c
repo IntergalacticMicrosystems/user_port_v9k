@@ -92,14 +92,61 @@ int matches_pattern(const char *filename) {
     return 0;
 }
 
+uint64_t calculate_offset(uint32_t partition_start_lba, uint32_t sector_number_within_partition, uint32_t sector_size) {
+    return (uint64_t)(partition_start_lba + sector_number_within_partition) * sector_size;
+}
+
+int read_mbr(FIL *disk_image, MBR *mbr) {
+    FRESULT res;
+    uint8_t buffer[SECTOR_SIZE];
+
+    // Read the MBR (first 512 bytes)
+    size_t bytes_read;
+    res = f_read(disk_image, buffer, SECTOR_SIZE, &bytes_read);
+    if (bytes_read != SECTOR_SIZE) {
+        perror("Error reading MBR");
+        return -1;
+    }
+
+    return 0;
+}
+
+int read_bpb(FIL *disk_image, uint32_t start_lba, BPB_FAT12 *bpb) {
+    FRESULT res;
+    UINT bytes_read;
+
+    // Calculate the byte offset to the start of the first partition
+    FSIZE_t offset = (FSIZE_t)start_lba * SECTOR_SIZE;
+
+    res = f_lseek(disk_image, offset);
+    // Seek to the beginning of the first partition
+    if (res != FR_OK) {
+        perror("Error seeking to first partition");
+        return -1;
+    }
+
+    // Read the BPB (first sector of the partition)
+    res = f_read(disk_image, bpb, sizeof(BPB_FAT12), &bytes_read);
+    if (res != FR_OK) {
+        printf("f_read failed: %d\n", res);
+        return -1;
+    }
+    if (bytes_read != sizeof(BPB_FAT12)) {
+        perror("Error reading BPB");
+        return -1;
+    }
+
+    return 0;
+}
+
 
 // Function to read a sector from the image file
-int read_sector(FIL *img_file, uint32_t sector_number, uint8_t *buffer) {
+int read_sector(FIL *img_file, uint32_t partition_start_lba, uint32_t sector_number, uint8_t *buffer) {
     FRESULT res;
     UINT bytes_read;
 
     // Move the file pointer to the desired sector
-    FSIZE_t offset = (FSIZE_t)sector_number * SECTOR_SIZE;
+    FSIZE_t offset = (FSIZE_t) calculate_offset(partition_start_lba, sector_number, SECTOR_SIZE);
     res = f_lseek(img_file, offset);
     if (res != FR_OK) {
         printf("f_lseek failed: %d\n", res);
@@ -132,6 +179,73 @@ uint32_t get_first_partition_start(uint8_t *mbr_buffer) {
     return start_sector;
 }
 
+int read_fat12_bpb_from_img_file(FIL *disk_image, VictorBPB *victor_bpb) {
+    MBR mbr;
+    BPB_FAT12 bpb;
+
+    // Read the MBR
+    if (read_mbr(disk_image, &mbr) != 0) {
+        fprintf(stderr, "Failed to read MBR\n");
+        return -1;
+    }
+
+    // Check the boot signature
+    if (mbr.boot_signature != 0xAA55) {
+        fprintf(stderr, "Invalid MBR boot signature: 0x%X\n", mbr.boot_signature);
+        return -1;
+    }
+
+    // Get the first partition entry
+    PartitionEntry *first_partition = &mbr.partition_table[0];
+
+    if (first_partition->partition_type == 0) {
+        fprintf(stderr, "First partition is not defined.\n");
+        return -1;
+    }
+
+    printf("First Partition Details:\n");
+    printf("  Boot Indicator: 0x%X\n", first_partition->boot_indicator);
+    printf("  Partition Type: 0x%X\n", first_partition->partition_type);
+    printf("  Start LBA: %u\n", first_partition->start_lba);
+    printf("  Size in Sectors: %u\n\n", first_partition->size_in_sectors);
+
+    // Read the BPB from the first partition
+    if (read_bpb(disk_image, first_partition->start_lba, &bpb) != 0) {
+        fprintf(stderr, "Failed to read BPB from the first partition\n");
+        return -1;
+    }
+
+    // Output some BPB information
+    printf("BIOS Parameter Block (BPB) Information:\n");
+    printf("  OEM Name: %.8s\n", bpb.oem_name);
+    printf("  Bytes per Sector: %u\n", bpb.bytes_per_sector);
+    printf("  Sectors per Cluster: %u\n", bpb.sectors_per_cluster);
+    printf("  Reserved Sector Count: %u\n", bpb.reserved_sector_count);
+    printf("  Number of FATs: %u\n", bpb.num_fats);
+    printf("  Root Entry Count: %u\n", bpb.root_entry_count);
+    printf("  Total Sectors (16-bit): %u\n", bpb.total_sectors_16);
+    printf("  Total Sectors (32-bit): %u\n", bpb.total_sectors_32);
+    printf("  FAT Size (16-bit): %u\n", bpb.fat_size_16);
+    printf("  Volume Label: %.11s\n", bpb.volume_label);
+    printf("  File System Type: %.8s\n", bpb.fs_type);
+
+    victor_bpb->bytes_per_sector = bpb.bytes_per_sector;
+    victor_bpb->sectors_per_cluster = bpb.sectors_per_cluster;
+    victor_bpb->reserved_sectors = bpb.reserved_sector_count;
+    victor_bpb->num_fats = bpb.num_fats;
+    victor_bpb->root_entry_count = bpb.root_entry_count;
+    victor_bpb->total_sectors = bpb.total_sectors_16;
+    victor_bpb->media_descriptor = bpb.media_type;
+    victor_bpb->sectors_per_fat = bpb.fat_size_16;
+    victor_bpb->sectors_per_track = bpb.sectors_per_track;
+    victor_bpb->num_heads = bpb.num_heads;
+    victor_bpb->hidden_sectors = bpb.hidden_sectors;
+    victor_bpb->partition_start_lba = first_partition->start_lba;
+
+    return 0;
+}
+
+
 /* Function to parse the BPB from a FAT16 .img file */
 int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
 
@@ -142,7 +256,7 @@ int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
     size_t bytes_read;
 
     // Read MBR from sector 0
-    if (read_sector(img_file, 0, buffer) != 0) {
+    if (read_sector(img_file, bpb->partition_start_lba, 0, buffer) != 0) {
         f_close(img_file);
         return -1;
     }
@@ -152,7 +266,7 @@ int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
     printf("First partition starts at sector: %u\n", partition_start);
 
     // Read the boot sector of the first partition
-    if (read_sector(img_file, partition_start, boot_sector) != 0) {
+    if (read_sector(img_file, bpb->partition_start_lba, partition_start, boot_sector) != 0) {
         f_close(img_file);
         return -1;
     }
@@ -335,12 +449,12 @@ SDState* initialize_sd_state(const char *directory) {
             printf("Found matching file: %d %s\n", sdState->fileCount, fno.fname);
             strncpy(sdState->file_names[sdState->fileCount], fno.fname, FILENAME_MAX_LENGTH - 1);
             sdState->file_names[sdState->fileCount][FILENAME_MAX_LENGTH - 1] = '\0';
-            sdState->img_file[sdState->fileCount] = malloc(sizeof(FIL));
-            if (!sdState->img_file[sdState->fileCount]) {
+            sdState->images[sdState->fileCount]->img_file = malloc(sizeof(FIL));
+            if (!sdState->images[sdState->fileCount]->img_file) {
                 perror("Failed to allocate FIL");
                 // Handle cleanup and error
             }
-            FRESULT fr = f_open(sdState->img_file[sdState->fileCount], fno.fname, FA_OPEN_EXISTING | FA_READ | FA_WRITE);
+            FRESULT fr = f_open(sdState->images[sdState->fileCount]->img_file, fno.fname, FA_OPEN_EXISTING | FA_READ | FA_WRITE);
             if (FR_OK != fr) {
                 printf("error opening file, %s", fno.fname);
             }
@@ -359,7 +473,7 @@ SDState* initialize_sd_state(const char *directory) {
 
 void freeSDState(SDState *sdState) {
     for (int i = 0; i < sdState->fileCount; i++) {
-        f_close(sdState->img_file[i]);
+        f_close(sdState->images[i]->img_file);
     }
     f_close(sdState->debug_log);
     f_unmount("");
@@ -413,12 +527,12 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
     for (i = 0; i < num_drives; i++) {
         printf("Parsing BPB for %s\n", sdState->file_names[i]);
         if (strcasestr(sdState->file_names[i], "_v9k") != 0) {
-            if (parse_victor9000_disk_label(sdState->img_file[i], &initPayload->bpb_array[i]) != 0) {
+            if (parse_victor9000_disk_label(sdState->images[i]->img_file, &initPayload->bpb_array[i]) != 0) {
                 printf("Error parsing BPB for %s\n", sdState->file_names[i]);
                 return false;
             }
         } else {
-            if (parse_fat16_bpb(sdState->img_file[i], &initPayload->bpb_array[i]) != 0) {
+            if (read_fat12_bpb_from_img_file(sdState->images[i]->img_file, &initPayload->bpb_array[i]) != 0) {
                 printf("Error parsing BPB for %s\n", sdState->file_names[i]);
                 return false;
             }
@@ -470,10 +584,10 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
 
     // Calculate the offset in the .img file
     int startSector = readParams->start_sector;
-    long offset = startSector * SECTOR_SIZE;
+    long offset = calculate_offset(sdState->images[driveNumber]->start_lba, startSector, SECTOR_SIZE);
 
     // Move to the calculated offset
-    if (FR_OK != f_lseek(sdState->img_file[driveNumber], offset)) {
+    if (FR_OK != f_lseek(sdState->images[driveNumber]->img_file, offset)) {
         printf("Failed to seek to offset");
         response->status = FILE_SEEK_ERROR;
         free(response->params);
@@ -495,7 +609,7 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
         return NULL;
     }
     UINT bytesRead;
-    FRESULT result = f_read(sdState->img_file[driveNumber], buffer, bytesToRead, &bytesRead);
+    FRESULT result = f_read(sdState->images[driveNumber]->img_file, buffer, bytesToRead, &bytesRead);
     if (FR_OK != result) {
         DBG_PRINTF("Failed to read the expected number of bytes");
         response->status = FILE_SEEK_ERROR;
@@ -536,10 +650,10 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
 
     // Calculate the offset in the .img file
     int startSector = writeParams->start_sector;
-    long offset = startSector * SECTOR_SIZE;
+    FSIZE_t offset = (FSIZE_t) calculate_offset(sdState->images[driveNumber]->start_lba, startSector, SECTOR_SIZE);
 
     // Move to the calculated offset
-    if (FR_OK != f_lseek(sdState->img_file[driveNumber], offset)) {
+    if (FR_OK != f_lseek(sdState->images[driveNumber]->img_file, offset)) {
         printf("Failed to seek to offset");
         response->status = FILE_SEEK_ERROR;
         free(response->params);
@@ -552,7 +666,7 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     size_t bytesToWrite = sectorCount * SECTOR_SIZE;
 
     UINT bytesWriten;
-    FRESULT result = f_write(sdState->img_file[driveNumber], payload->data, bytesToWrite, &bytesWriten);
+    FRESULT result = f_write(sdState->images[driveNumber]->img_file, payload->data, bytesToWrite, &bytesWriten);
     if (FR_OK != result) {
         DBG_PRINTF("Failed to read the expected number of bytes");
         response->status = FILE_SEEK_ERROR;
