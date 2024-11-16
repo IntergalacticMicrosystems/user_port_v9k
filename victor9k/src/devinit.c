@@ -201,7 +201,8 @@ uint16_t deviceInit( void ) {
     initPayload.params_size = sizeof(init_params);
     initPayload.params = &init_params[0];
     uint8_t data[1] = {0};
-    initPayload.data = &data[0];
+    uint8_t far *data_ptr = &data[0];
+    initPayload.data = data_ptr;
     initPayload.data_size = sizeof(data);
     if (debug) cdprintf("sending data_size: %d\n", initPayload.data_size);
     create_payload_crc8(&initPayload);
@@ -226,7 +227,8 @@ uint16_t deviceInit( void ) {
         return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
     }
     uint8_t response_data[MAX_INIT_PAYLOAD_SIZE] = {0};
-    responsePayload.data = &response_data[0];
+    uint8_t far *response_data_ptr = &response_data[0];
+    responsePayload.data = response_data_ptr;
     
     outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
@@ -282,15 +284,14 @@ uint16_t deviceInit( void ) {
     if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     //parsing the response
     if (debug) cdprintf("received response, parsing data\n");
-    InitPayload *init_details= (InitPayload *) &responsePayload.data[0];
-    if (sizeof(init_details) > sizeof(InitPayload)) {
-        if (debug) cdprintf("SD: sizeof(init_details) > sizeof(InitPayload)\n");
-        if (debug) cdprintf("SD: sizeof(init_details): %u sizeof(InitPayload): %u\n", sizeof(init_details), sizeof(InitPayload));
+    if (debug) cdprintf("SD: sizeof(InitPayload): %u responsePayload.data_size: %u\n", sizeof(InitPayload), responsePayload.data_size);
+    if (responsePayload.data_size > sizeof(InitPayload)) {
+        if (debug) cdprintf("SD: ERROR: responsePayload.data_size > sizeof(InitPayload)\n");
         return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
     }
-    if (debug) cdprintf("SD: received response, parsing data\n");
+    InitPayload *init_details= (InitPayload *) &responsePayload.data[0];
     if (debug) cdprintf("SD: num_drives: %d\n", init_details->num_units);
-    if (debug) cdprintf("SD: sizeof(init_details): %u\n", sizeof(init_details));
+    if (debug) cdprintf("SD: sizeof(init_details): %u\n", sizeof(*init_details));
 
     num_drives = init_details->num_units;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.

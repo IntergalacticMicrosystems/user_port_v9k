@@ -112,7 +112,7 @@ ResponseStatus initialize_user_port(void);
 void interrupt far userPortISR(void);
 ResponseStatus send_startup_handshake(void);
 ResponseStatus send_uint16_t(uint16_t data);
-ResponseStatus sendBytes(uint8_t* data, size_t length);
+ResponseStatus sendBytes(uint8_t far *data, size_t length);
 ResponseStatus receiveBytes(uint8_t far *data, size_t length);
 ResponseStatus send_command_payload(Payload *payload);
 ResponseStatus send_command(Payload *command);

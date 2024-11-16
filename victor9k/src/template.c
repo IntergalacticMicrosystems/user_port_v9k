@@ -250,7 +250,8 @@ static uint16_t readBlock (void)
     readPayload.params_size = sizeof(readParams);
     readPayload.params = (uint8_t *)(&readParams);
     uint8_t data[1] = {0};
-    readPayload.data = &data[0];
+    uint8_t far *data_ptr = &data[0];
+    readPayload.data = data_ptr;
     readPayload.data_size = sizeof(data);
     if (debug) cdprintf("sending data_size: %u\n", readPayload.data_size);
 

@@ -96,7 +96,7 @@ ResponseStatus burstBytes(uint8_t far *data, size_t length) {
         initialize_user_port();
     }
     if (debug) cdprintf("burstBytes start\n");
-    
+    if (debug) cdprintf("burstBytes &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
     for (size_t i = 0; i < length; ++i) {
         via3->out_in_reg_b = data[i]; // Send data byte
     }
@@ -106,12 +106,13 @@ ResponseStatus burstBytes(uint8_t far *data, size_t length) {
 
 //sends a byte array to the user port, waiting for DATA_TAKEN signal to 
 //be set before sending the next byte
-ResponseStatus sendBytes(uint8_t* data, size_t length) {
+ResponseStatus sendBytes(uint8_t far *data, size_t length) {
     if (viaInitialized == false) {
         if (debug) cdprintf("VIA not initialized\n");
         initialize_user_port();
     }
-    //if (debug) cdprintf("sendBytesPB start\n");
+    if (debug) cdprintf("sendBytesPB start\n");
+    if (debug) cdprintf("sendBytesPB &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
     int iteration = 0;
     for (size_t i = 0; i < length; ++i) {
         //if (debug) cdprintf("i: %d: value: %d\n", i, data[i]);
@@ -140,6 +141,8 @@ ResponseStatus receiveBytes(uint8_t far *data, size_t length) {
         return PORT_NOT_INITIALIZED;
    }
    if (debug) cdprintf("receiveBytesPA start size: %d\n", length);
+   if (debug) cdprintf("receiveBytesPA &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
+ 
    for (size_t i = 0; i < length; ++i) {
       //if (debug) cdprintf("waiting for data i: %d int_flag_reg: %x\n", i, via3->int_flag_reg);
       while ((via3->int_flag_reg & CA1_INTERRUPT_MASK) == 0) {}; // Poll CA1 for Data Ready signal
@@ -204,7 +207,7 @@ ResponseStatus send_uint16_t(uint16_t data) {
     uint8_t data_array[2];
     data_array[0] = (data >> 8) & 0xFF;  //high_byte
     data_array[1] = data & 0xFF;         //low_byte;
-    sendBytes( (uint8_t *) &data_array[0], 2); 
+    sendBytes( (uint8_t far *) &data_array[0], 2); 
     return STATUS_OK;
 }
 
@@ -239,14 +242,14 @@ ResponseStatus send_command_payload(Payload *payload) {
 
 ResponseStatus send_command_packet(Payload *payload) {
     if (debug) cdprintf("sending command packet protocol: %d command: %d\n", payload->protocol, payload->command);
-    sendBytes( (uint8_t *) &payload->protocol, 1);
-    sendBytes( (uint8_t *) &payload->command, 1); 
+    sendBytes( (uint8_t far *) &payload->protocol, 1);
+    sendBytes( (uint8_t far *) &payload->command, 1); 
     
     if (debug) cdprintf("params_size: %d\n", payload->params_size);
     send_uint16_t(payload->params_size);  //send the size of the params
     if (debug) cdprintf("sending params\n");
     burstBytes( payload->params, payload->params_size);  //send the actual params
-    sendBytes( (uint8_t *) &payload->command_crc, 1);
+    sendBytes( (uint8_t far *) &payload->command_crc, 1);
 
     ResponseStatus crc_success = receive_response_status();
     return crc_success;
@@ -259,15 +262,15 @@ ResponseStatus send_data_packet(Payload *payload) {
     if (debug) cdprintf("sending data\n");
     burstBytes( payload->data, payload->data_size);  //send the actual data
     if (debug) cdprintf("sending data_crc\n");
-    sendBytes( (uint8_t *) &payload->data_crc, 1);
+    sendBytes( (uint8_t far *) &payload->data_crc, 1);
     ResponseStatus crc_success = receive_response_status();
     return crc_success;
 }
 
 uint16_t receive_uint16_t() {
     uint8_t high_byte, low_byte;
-    uint8_t *high_byte_ptr = (uint8_t *) &high_byte;
-    uint8_t *low_byte_ptr = (uint8_t *) &low_byte;
+    uint8_t far *high_byte_ptr = (uint8_t far *) &high_byte;
+    uint8_t far *low_byte_ptr = (uint8_t far *) &low_byte;
     receiveBytes( high_byte_ptr, 1);
     receiveBytes( low_byte_ptr, 1);
     return (high_byte << 8) | low_byte;
@@ -298,7 +301,7 @@ ResponseStatus receive_response(Payload *response) {
     if (debug) cdprintf("Receiving data\n");
     receiveBytes( response->data, response->data_size);
     if (debug) cdprintf("Receiving data_crc\n");
-    receiveBytes( (uint8_t *) &response->data_crc, 1);
+    receiveBytes( (uint8_t far *) &response->data_crc, 1);
     if (is_valid_data_crc8(response) ) {
         sendResponseStatus(STATUS_OK);
         if (debug) cdprintf("data_crc valid\n");
