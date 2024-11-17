@@ -211,12 +211,13 @@ uint32_t get_first_partition_start(uint8_t *mbr_buffer) {
     return start_sector;
 }
 
-int read_fat12_bpb_from_img_file(FIL *disk_image, VictorBPB *victor_bpb) {
+int read_fat12_bpb_from_img_file(DriveImage *drive_image, VictorBPB *victor_bpb) {
     MBR mbr;
     BPB_FAT12 bpb;
+    FIL *img_file = drive_image->img_file;
 
     // Read the MBR
-    if (read_mbr(disk_image, &mbr) != 0) {
+    if (read_mbr(img_file, &mbr) != 0) {
         fprintf(stderr, "Failed to read MBR\n");
         return -1;
     }
@@ -242,7 +243,7 @@ int read_fat12_bpb_from_img_file(FIL *disk_image, VictorBPB *victor_bpb) {
     printf("  Size in Sectors: %u\n\n", first_partition->size_in_sectors);
 
     // Read the BPB from the first partition
-    if (read_bpb(disk_image, first_partition->start_lba, &bpb) != 0) {
+    if (read_bpb(img_file, first_partition->start_lba, &bpb) != 0) {
         fprintf(stderr, "Failed to read BPB from the first partition\n");
         return -1;
     }
@@ -255,10 +256,8 @@ int read_fat12_bpb_from_img_file(FIL *disk_image, VictorBPB *victor_bpb) {
     victor_bpb->total_sectors = bpb.total_sectors_16;
     victor_bpb->media_descriptor = bpb.media_type;
     victor_bpb->sectors_per_fat = bpb.fat_size_16;
-    victor_bpb->sectors_per_track = bpb.sectors_per_track;
-    victor_bpb->num_heads = bpb.num_heads;
-    victor_bpb->hidden_sectors = bpb.hidden_sectors;
-    victor_bpb->partition_start_lba = first_partition->start_lba;
+   
+    drive_image->start_lba = first_partition->start_lba;
 
     print_debug_bpb(victor_bpb);
 
@@ -275,24 +274,21 @@ void print_debug_bpb(VictorBPB *bpb) {
     printf("  Total Sectors: %u\n", bpb->total_sectors);
     printf("  Media Descriptor: 0x%X\n", bpb->media_descriptor);
     printf("  Sectors per FAT: %u\n", bpb->sectors_per_fat);
-    printf("  Sectors per Track: %u\n", bpb->sectors_per_track);
-    printf("  Number of Heads: %u\n", bpb->num_heads);
-    printf("  Hidden Sectors: %u\n", bpb->hidden_sectors);
-    printf("  Partition Start LBA: %u\n", bpb->partition_start_lba);
 }
 
 
 /* Function to parse the BPB from a FAT16 .img file */
-int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
+int parse_fat16_bpb(DriveImage *drive_image, VictorBPB *bpb) {
 
     FRESULT res;
     uint8_t buffer[SECTOR_SIZE];
+    FIL *img_file = drive_image->img_file;
 
     uint8_t boot_sector[SECTOR_SIZE]; 
     size_t bytes_read;
 
     // Read MBR from sector 0
-    if (read_sector(img_file, bpb->partition_start_lba, 0, buffer) != 0) {
+    if (read_sector(img_file, drive_image->start_lba, 0, buffer) != 0) {
         f_close(img_file);
         return -1;
     }
@@ -302,7 +298,7 @@ int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
     printf("First partition starts at sector: %u\n", partition_start);
 
     // Read the boot sector of the first partition
-    if (read_sector(img_file, bpb->partition_start_lba, partition_start, boot_sector) != 0) {
+    if (read_sector(img_file, drive_image->start_lba, partition_start, boot_sector) != 0) {
         f_close(img_file);
         return -1;
     }
@@ -317,25 +313,21 @@ int parse_fat16_bpb(FIL *img_file, VictorBPB *bpb) {
     bpb->total_sectors        = boot_sector[19] | (boot_sector[20] << 8);
     bpb->media_descriptor     = boot_sector[21];
     bpb->sectors_per_fat      = boot_sector[22] | (boot_sector[23] << 8);
-    bpb->sectors_per_track    = boot_sector[24] | (boot_sector[25] << 8);
-    bpb->num_heads            = boot_sector[26] | (boot_sector[27] << 8);
-    bpb->hidden_sectors       = boot_sector[28] |
-                               (boot_sector[29] << 8) |
-                               (boot_sector[30] << 16) |
-                               (boot_sector[31] << 24);
+   
     print_debug_bpb(bpb);
     return 0; /* Success */
 }
 
-int build_bpbs_from_v9k_disk_label(FIL *disk_image, VictorBPB bpb[], uint8_t max_units) {
+int build_bpbs_from_v9k_disk_label(DriveImage *drive_image, VictorBPB bpb[], uint8_t max_units) {
     
     uint8_t result;
     int vol;
     size_t bytes_read;
+    FIL *img_file = drive_image->img_file;
 
     // Read and parse the drive label
     V9kDriveLabel *drive_label = malloc(sizeof(V9kDriveLabel));
-    result = read_drive_label(disk_image, drive_label); 
+    result = read_drive_label(img_file, drive_label); 
     if (result != 0) {
         printf("Error parsing variable lists\n");
         return -1;
@@ -361,7 +353,7 @@ int build_bpbs_from_v9k_disk_label(FIL *disk_image, VictorBPB bpb[], uint8_t max
             return vol;
         }
         V9kVirtualVolumeLabel *volume_label = malloc(sizeof(V9kVirtualVolumeLabel));
-        result = read_virtual_volume_label(disk_image, volume_list->volume_addresses[vol], volume_label);
+        result = read_virtual_volume_label(img_file, volume_list->volume_addresses[vol], volume_label);
         if (result != 0) {
             printf("Error reading virtual volume label\n");
             return vol;
@@ -383,11 +375,6 @@ int build_bpbs_from_v9k_disk_label(FIL *disk_image, VictorBPB bpb[], uint8_t max
 
         // FAT size depends on total clusters (assume FAT16 for simplicity)
         bpb[vol].sectors_per_fat = (total_clusters * 2 + drive_label->sector_size - 1) / drive_label->sector_size;
-
-        // Populate geometry
-        bpb[vol].sectors_per_track = calculate_sectors_per_track(volume_label->capacity, ctrl_params->num_cylinders, ctrl_params->num_heads);
-        bpb[vol].num_heads = ctrl_params->num_heads;
-        bpb[vol].hidden_sectors = 0; // Assume no offset
 
         print_debug_bpb(&bpb[vol]);
         free(volume_label);
@@ -536,13 +523,13 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
         printf("Parsing BPB for %s\n", sdState->file_names[i]);
         if (strcasestr(sdState->file_names[i], "_v9k") != 0) {
             //each V9k disk image has multiple volumes, so we need to build BPBs for each volume
-            uint8_t volumes = build_bpbs_from_v9k_disk_label(sdState->images[i]->img_file, initPayload->bpb_array, (MAX_IMG_FILES - i));
+            uint8_t volumes = build_bpbs_from_v9k_disk_label(sdState->images[i], initPayload->bpb_array, (MAX_IMG_FILES - i));
             if (volumes == 0) {
                 printf("Error parsing BPB for %s\n", sdState->file_names[i]);
             }
             i += volumes;
         } else {
-            if (read_fat12_bpb_from_img_file(sdState->images[i]->img_file, &initPayload->bpb_array[i]) != 0) {
+            if (read_fat12_bpb_from_img_file(sdState->images[i], &initPayload->bpb_array[i]) != 0) {
                 printf("Error parsing BPB for %s\n", sdState->file_names[i]);
             }
             i++;
@@ -595,6 +582,7 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     // Calculate the offset in the .img file
     int startSector = readParams->start_sector;
     long offset = calculate_mbr_offset(sdState->images[driveNumber]->start_lba, startSector, SECTOR_SIZE);
+    printf("sd_read startSector: %u, Offset: %ld\n", startSector, offset);
 
     // Move to the calculated offset
     if (FR_OK != f_lseek(sdState->images[driveNumber]->img_file, offset)) {
@@ -631,6 +619,7 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data_size = (uint16_t) bytesRead;
     response->data = buffer;
     response->status = STATUS_OK;
+    printf("sd_read Read %u bytes\n", bytesRead);
     create_command_crc8(response);
     create_data_crc8(response);
     
@@ -661,6 +650,7 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     // Calculate the offset in the .img file
     int startSector = writeParams->start_sector;
     FSIZE_t offset = (FSIZE_t) calculate_mbr_offset(sdState->images[driveNumber]->start_lba, startSector, SECTOR_SIZE);
+    printf("sd_write startSector: %u, Offset: %ld\n", startSector, offset);
 
     // Move to the calculated offset
     if (FR_OK != f_lseek(sdState->images[driveNumber]->img_file, offset)) {
@@ -688,6 +678,7 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data = (uint8_t *)malloc(1);
     response->data[0] = 0;
     response->status = STATUS_OK;
+    printf("sd_write Wrote %u bytes\n", bytesWriten);
     create_command_crc8(response);
     create_data_crc8(response);
     

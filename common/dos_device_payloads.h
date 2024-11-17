@@ -70,10 +70,10 @@ typedef struct {                     /* Victor BIOS Parameter block structure */
     uint16_t total_sectors;          /*  device size, in sectors      */
      uint8_t media_descriptor;       /*  media descriptor code from the BIOS   */
     uint16_t sectors_per_fat;        /*  number of sectors per FAT    */
-    uint16_t sectors_per_track;      /*  track size, in sectors    */
-    uint16_t num_heads;              /*  number of heads        */
-    uint32_t hidden_sectors;         /*  offset of this hard disk partition */
-    uint32_t partition_start_lba;   /*  offset of the partition inside disk */
+    // uint16_t sectors_per_track;      /*  track size, in sectors    */
+    // uint16_t num_heads;              /*  number of heads        */
+    // uint32_t hidden_sectors;         /*  offset of this hard disk partition */
+    // uint32_t partition_start_lba;   /*  offset of the partition inside disk */
 } VictorBPB;
 
 // Structure for the BIOS Parameter Block (FAT12/FAT16)
@@ -203,10 +203,10 @@ typedef struct {
 } MediaCheckPayload;
 
 typedef struct {
-    uint8_t media_descriptor;  /*  media descriptor uint8_t from BIOS */
+    uint8_t media_descriptor;    /*  media descriptor uint8_t from BIOS */
     //todo: move firstSector to command Payload
-    char *first_sector[512];   /*  the frist sector handed to us from DOS*/
-    VictorBPB bios_param_block;       /*  actual BIOS Parameter Block   */
+    char *first_sector[512];     /*  the first sector handed to us from DOS*/
+    VictorBPB bios_param_block;  /*  actual BIOS Parameter Block   */
 } BuildBpbPayload;
 
 typedef struct { 
