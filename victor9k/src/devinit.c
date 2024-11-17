@@ -63,10 +63,10 @@
 static bool validate_far_ptr(void far *ptr, size_t size); // Function to validate a far pointer
 
 #pragma data_seg("_CODE")
-//((7*16 + 3*8 +32) * 9 + 1)  (size of VictorBPB) * MAX_DRIVES + 1 for num_units
+//((7*16 + 3*8 + 2*32) * 9 + 1)  (size of VictorBPB) * MAX_DRIVES + 1 for num_units
 //my math doesn't match the compiler's math, so I'm going to use the compiler's math
-//1711 is observed from running on the Victor9K.
-#define MAX_INIT_PAYLOAD_SIZE 1711  
+//2035 is observed from running on the Victor9K.
+#define MAX_INIT_PAYLOAD_SIZE 2035  
 
 bool debug = true;
 static uint8_t portbase;

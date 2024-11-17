@@ -2,6 +2,7 @@
 #define SD_BLOCK_DEVICE_H
 
 #include "../../common/protocols.h"
+#include "../../common/dos_device_payloads.h"
 #include "pico_common.h"
 #include "../sdio-fatfs/src/ff15/source/ff.h"
 
@@ -18,6 +19,7 @@ typedef struct {
     FIL *debug_log;
 } SDState;
 
+void print_debug_bpb(VictorBPB *bpb);
 SDState* initialize_sd_state(const char *directory);
 Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload);
 Payload* media_check(SDState *sdState, PIO_state *pio_state, Payload *payload);

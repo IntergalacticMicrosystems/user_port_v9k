@@ -141,7 +141,7 @@ typedef struct {
     uint16_t label_type;        // Label Type
     uint16_t device_id;         // Device ID
     uint8_t serial_number[16];  // Serial Number
-    uint16_t sec_size;          // Sector Size
+    uint16_t sector_size;          // Sector Size
 
     // IPL Vector
     uint32_t ipl_da;            // Disk Address
@@ -150,7 +150,7 @@ typedef struct {
     uint32_t ipl_entry;         // Code Entry PTR
 
     uint16_t p_boot_vol;        // Primary Boot Volume
-    uint8_t ctrl_parms[16];     // Control Parameters
+    uint8_t ctrl_params[16];     // Control Parameters
 
     // Variable Lists (Available Media List, Working Media List, Virtual Volume List)
     uint8_t var_lists[972];
