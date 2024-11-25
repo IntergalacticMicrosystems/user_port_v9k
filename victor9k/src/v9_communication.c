@@ -29,6 +29,7 @@ static volatile uint8_t far *pic = MK_FP(INTEL_DEV_SEGMENT, PIC_8259_OFFSET);
 
 static uint8_t buffer;
 static bool bufferFull = false;
+static bool payloadDebug = false;
 
 void interrupt far userPortISR(void) {
    // Check if the interrupt is for your device and handle it
@@ -95,12 +96,12 @@ ResponseStatus burstBytes(uint8_t far *data, size_t length) {
         if (debug) cdprintf("VIA not initialized\n");
         initialize_user_port();
     }
-    if (debug) cdprintf("burstBytes start\n");
-    if (debug) cdprintf("burstBytes &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
+    if (payloadDebug) cdprintf("burstBytes start\n");
+    if (payloadDebug) cdprintf("burstBytes &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
     for (size_t i = 0; i < length; ++i) {
         via3->out_in_reg_b = data[i]; // Send data byte
     }
-    if (debug) cdprintf("burstBytes end\n");
+    if (payloadDebug) cdprintf("burstBytes end\n");
     return STATUS_OK;
 }
 
@@ -111,8 +112,8 @@ ResponseStatus sendBytes(uint8_t far *data, size_t length) {
         if (debug) cdprintf("VIA not initialized\n");
         initialize_user_port();
     }
-    if (debug) cdprintf("sendBytesPB start\n");
-    if (debug) cdprintf("sendBytesPB &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
+    if (payloadDebug) cdprintf("sendBytesPB start\n");
+    if (payloadDebug) cdprintf("sendBytesPB &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
     int iteration = 0;
     for (size_t i = 0; i < length; ++i) {
         //if (debug) cdprintf("i: %d: value: %d\n", i, data[i]);
@@ -140,8 +141,8 @@ ResponseStatus receiveBytes(uint8_t far *data, size_t length) {
         initialize_user_port();
         return PORT_NOT_INITIALIZED;
    }
-   if (debug) cdprintf("receiveBytesPA start size: %d\n", length);
-   if (debug) cdprintf("receiveBytesPA &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
+   if (payloadDebug) cdprintf("receiveBytesPA start size: %d\n", length);
+   if (payloadDebug) cdprintf("receiveBytesPA &data: %4x:%4x\n", FP_SEG(data), FP_OFF(data));
  
    for (size_t i = 0; i < length; ++i) {
       //if (debug) cdprintf("waiting for data i: %d int_flag_reg: %x\n", i, via3->int_flag_reg);
@@ -149,7 +150,7 @@ ResponseStatus receiveBytes(uint8_t far *data, size_t length) {
       data[i] = via3->out_in_reg_a; // get data byte
       //if (debug) cdprintf("received: %d %d\n", i, data[i]);
    }
-   if (debug) cdprintf("receiveBytesPA end\n");
+   if (payloadDebug) cdprintf("receiveBytesPA end\n");
    return STATUS_OK;
 }
 
@@ -191,7 +192,7 @@ ResponseStatus send_startup_handshake(void) {
         }
 
         if (response == HANDSHAKE_RESPONSE) {
-            if (debug) cdprintf("Handshake successful\n");
+            if (payloadDebug) cdprintf("Handshake successful\n");
             return STATUS_OK;
         } else {
             if (debug) cdprintf("Unexpected response %d, retrying\n", response);
@@ -203,7 +204,7 @@ ResponseStatus send_startup_handshake(void) {
 }
 
 ResponseStatus send_uint16_t(uint16_t data) {
-    if (debug) cdprintf("send_uint16_t: %d\n", data);
+    if (payloadDebug) cdprintf("send_uint16_t: %d\n", data);
     uint8_t data_array[2];
     data_array[0] = (data >> 8) & 0xFF;  //high_byte
     data_array[1] = data & 0xFF;         //low_byte;
@@ -225,7 +226,7 @@ ResponseStatus receive_response_status() {
 ResponseStatus send_command_payload(Payload *payload) {
     ResponseStatus crc_outcome;
     for (int i = 0; i < 9; i++) {
-        if (debug) cdprintf("sending command packet %d\n", i);
+        if (payloadDebug) cdprintf("sending command packet %d\n", i);
         crc_outcome = send_command_packet(payload);
         if (crc_outcome != STATUS_OK) {
             continue;
@@ -234,20 +235,20 @@ ResponseStatus send_command_payload(Payload *payload) {
         if (crc_outcome != STATUS_OK) {
             continue;
         }
-        if (debug) cdprintf("command packet sent\n");
+        if (payloadDebug) cdprintf("command packet sent\n");
         break;
     }
     return crc_outcome;
 }
 
 ResponseStatus send_command_packet(Payload *payload) {
-    if (debug) cdprintf("sending command packet protocol: %d command: %d\n", payload->protocol, payload->command);
+    if (payloadDebug) cdprintf("sending command packet protocol: %d command: %d\n", payload->protocol, payload->command);
     sendBytes( (uint8_t far *) &payload->protocol, 1);
     sendBytes( (uint8_t far *) &payload->command, 1); 
     
-    if (debug) cdprintf("params_size: %d\n", payload->params_size);
+    if (payloadDebug) cdprintf("params_size: %d\n", payload->params_size);
     send_uint16_t(payload->params_size);  //send the size of the params
-    if (debug) cdprintf("sending params\n");
+    if (payloadDebug) cdprintf("sending params\n");
     burstBytes( payload->params, payload->params_size);  //send the actual params
     sendBytes( (uint8_t far *) &payload->command_crc, 1);
 
@@ -256,12 +257,12 @@ ResponseStatus send_command_packet(Payload *payload) {
 }
 
 ResponseStatus send_data_packet(Payload *payload) {
-    if (debug) cdprintf("sending data packet data_size: %d\n", payload->data_size);
-    if (debug) cdprintf("data_size: %d\n", payload->data_size);
+    if (payloadDebug) cdprintf("sending data packet data_size: %d\n", payload->data_size);
+    if (payloadDebug) cdprintf("data_size: %d\n", payload->data_size);
     send_uint16_t(payload->data_size);  //send the size of the data
-    if (debug) cdprintf("sending data\n");
+    if (payloadDebug) cdprintf("sending data\n");
     burstBytes( payload->data, payload->data_size);  //send the actual data
-    if (debug) cdprintf("sending data_crc\n");
+    if (payloadDebug) cdprintf("sending data_crc\n");
     sendBytes( (uint8_t far *) &payload->data_crc, 1);
     ResponseStatus crc_success = receive_response_status();
     return crc_success;
@@ -277,34 +278,34 @@ uint16_t receive_uint16_t() {
 }
 
 ResponseStatus receive_response(Payload *response) {
-    if (debug) cdprintf("Receiving response\n");
+    if (payloadDebug) cdprintf("Receiving response\n");
     receiveBytes( (uint8_t *) &response->protocol, 1);
     receiveBytes( (uint8_t *) &response->command, 1);
-    if (debug) cdprintf("protocol: %d\n", response->protocol);
+    if (payloadDebug) cdprintf("protocol: %d\n", response->protocol);
     response->params_size = receive_uint16_t();
-    if (debug) cdprintf("params_size: %d\n", response->params_size);
+    if (payloadDebug) cdprintf("params_size: %d\n", response->params_size);
     receiveBytes( response->params, response->params_size);
-    if (debug) cdprintf("Receiving command_crc\n");
+    if (payloadDebug) cdprintf("Receiving command_crc\n");
     receiveBytes( (uint8_t *) &response->command_crc, 1);
-    if (debug) cdprintf("command_crc: %d\n", response->command_crc);
+    if (payloadDebug) cdprintf("command_crc: %d\n", response->command_crc);
     if (is_valid_command_crc8(response) ) {
         sendResponseStatus(STATUS_OK);
-        if (debug) cdprintf("command_crc valid\n");
+        if (payloadDebug) cdprintf("command_crc valid\n");
     } else {
         sendResponseStatus(INVALID_CRC);
         if (debug) cdprintf("command_crc invalid\n");
         return INVALID_CRC;
     }
-    if (debug) cdprintf("Receiving data size: %d\n", response->data_size);
+    if (payloadDebug) cdprintf("Receiving data size: %d\n", response->data_size);
     response->data_size = receive_uint16_t();    
-    if (debug) cdprintf("data_size: %d\n", response->data_size);
-    if (debug) cdprintf("Receiving data\n");
+    if (payloadDebug) cdprintf("data_size: %d\n", response->data_size);
+    if (payloadDebug) cdprintf("Receiving data\n");
     receiveBytes( response->data, response->data_size);
-    if (debug) cdprintf("Receiving data_crc\n");
+    if (payloadDebug) cdprintf("Receiving data_crc\n");
     receiveBytes( (uint8_t far *) &response->data_crc, 1);
     if (is_valid_data_crc8(response) ) {
         sendResponseStatus(STATUS_OK);
-        if (debug) cdprintf("data_crc valid\n");
+        if (payloadDebug) cdprintf("data_crc valid\n");
     } else {
         sendResponseStatus(INVALID_CRC);
         if (debug) cdprintf("data_crc invalid\n");

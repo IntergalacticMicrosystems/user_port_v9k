@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 add_library(user_port_lib STATIC
+    log_functions.c
     command_dispatch.c
     v9k_hard_drives.c
     pico_communication.c

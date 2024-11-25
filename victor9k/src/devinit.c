@@ -141,21 +141,21 @@ uint16_t deviceInit( void ) {
 
     //address to find passed by DOS in a combo of ES / BX get_all_registers
     if (debug) {
-        cdprintf("about to parse bpb, ES: %x BX: %x\n", registers.es, registers.bx);
-        cdprintf("about to parse bpb, CS: %x DS: %x\n", registers.cs, registers.ds);
-        cdprintf("SD: command: %d r_unit: %d\n", fpRequest->r_command, fpRequest->r_unit);
+        writeToDriveLog("about to parse bpb, ES: %x BX: %x\n", registers.es, registers.bx);
+        writeToDriveLog("about to parse bpb, CS: %x DS: %x\n", registers.cs, registers.ds);
+        writeToDriveLog("SD: command: %d r_unit: %d\n", fpRequest->r_command, fpRequest->r_unit);
     }
     char name_buffer[9];  // 8 bytes for the name + 1 byte for the null terminator
     memcpy(name_buffer, (void const *) dev_header->dh_name, 8);
     name_buffer[8] = '\0';
 
     if (debug) {
-        cdprintf("SD: dh_name: %s\n", name_buffer);
-        cdprintf("SD: dh_next: %x\n", dev_header->dh_next);
+        writeToDriveLog("SD: dh_name: %s\n", name_buffer);
+        writeToDriveLog("SD: dh_next: %x\n", dev_header->dh_next);
     }
 
     //initialize the BPB table
-    if (debug) cdprintf("SD: initializing BPB table\n");
+    if (debug) writeToDriveLog("SD: initializing BPB table\n");
     for (int i = 0; i < MAX_IMG_FILES; i++) {
         if (debug) cdprintf("SD: my_bpb_tbl[%d] = &my_bpbs[%d] %X\n", i, i, (uint32_t) &my_bpbs[i]);
         my_bpb_tbl[i] = &my_bpbs[i];
@@ -171,29 +171,29 @@ uint16_t deviceInit( void ) {
 
     char far *bpb_cast_ptr = (char far *)(fpRequest->r_bpb_tbl_ptr);  
 
-    if (debug) cdprintf("gathered bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
+    if (debug) writeToDriveLog("gathered bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
     /* Parse the options from the CONFIG.SYS file, if any... */
     if (!parse_options((char far *) bpb_cast_ptr)) {
         if (debug) cdprintf("SD: bad options in CONFIG.SYS\n");
         return (S_DONE | S_ERROR | E_UNKNOWN_MEDIA ); 
     }
-    if (debug) cdprintf("done parsing bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
+    if (debug) writeToDriveLog("done parsing bpb_ptr: %x\n", (uint16_t) bpb_cast_ptr);
 
     /* Try to make contact with the drive... */
-    if (debug) cdprintf("SD: initializing drive r_unit: %u\n", (uint16_t) fpRequest->r_unit);
-    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
+    if (debug) writeToDriveLog("SD: initializing drive r_unit: %u\n", (uint16_t) fpRequest->r_unit);
+    if (debug) writeToDriveLog("checking CS: %x DS: %x\n", registers.cs, registers.ds);
 
-    if (debug) cdprintf("SD: initializing drive &my_bpb_tbl_far_ptr: %4x:%4x, my_bpb_tbl_far_ptr: %4x:%4x\n", 
+    if (debug) writeToDriveLog("SD: initializing drive &my_bpb_tbl_far_ptr: %4x:%4x, my_bpb_tbl_far_ptr: %4x:%4x\n", 
        FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr), 
        FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
 
-    if (debug) cdprintf("SD: initializing drive &my_bpb_tbl[0]: %4x:%4x, my_bpb_tbl[0]: %4x:%4x\n", 
+    if (debug) writeToDriveLog("SD: initializing drive &my_bpb_tbl[0]: %4x:%4x, my_bpb_tbl[0]: %4x:%4x\n", 
        FP_SEG(&my_bpb_tbl[0]), FP_OFF(&my_bpb_tbl[0]), 
        FP_SEG(my_bpb_tbl[0]), FP_OFF(my_bpb_tbl[0]));
 
-    if (debug) cdprintf("SD: initializing drive &my_bpbs[0]: %4x:%4x\n", 
+    if (debug) writeToDriveLog("SD: initializing drive &my_bpbs[0]: %4x:%4x\n", 
        FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
-    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
+    if (debug) writeToDriveLog("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     Payload initPayload = {0};
     initPayload.protocol = SD_BLOCK_DEVICE;
     initPayload.command = DEVICE_INIT;
@@ -204,7 +204,7 @@ uint16_t deviceInit( void ) {
     uint8_t far *data_ptr = &data[0];
     initPayload.data = data_ptr;
     initPayload.data_size = sizeof(data);
-    if (debug) cdprintf("sending data_size: %d\n", initPayload.data_size);
+    if (debug) writeToDriveLog("sending data_size: %d\n", initPayload.data_size);
     create_payload_crc8(&initPayload);
 
     ResponseStatus outcome = send_command_payload(&initPayload);

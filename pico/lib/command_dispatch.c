@@ -5,11 +5,15 @@
 #include "../../common/dos_device_payloads.h"
 #include "command_dispatch.h"
 #include "sd_block_device.h"
+#include "log_functions.h"
 
 Payload* dispatch_command(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     switch (payload->protocol) {
         case SD_BLOCK_DEVICE:
             return execute_sd_block_command(sdState, pio_state, payload);
+            break;
+        case LOG_OUTPUT:
+            return log_output(sdState, pio_state, payload);
             break;
         default:
             payload->status = INVALID_PROTOCOL;

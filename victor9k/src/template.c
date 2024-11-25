@@ -90,15 +90,15 @@ static uint16_t mediaCheck (void)
   
   // mediaCheck_data far *media_ptr;
   uint8_t drive_num = fpRequest->r_unit;
-  if (debug) cdprintf("SD: -----------------------------------------------\n");
-  if (debug) cdprintf("SD: mediaCheck()\n");
-  if (debug) cdprintf("about to parse mediaCheck, ES: %x BX: %x\n", registers.es, registers.bx);
-  if (debug) cdprintf("SD: mediaCheck: unit=%x\n", fpRequest->r_unit);
-  if (debug) cdprintf("SD: mediaCheck: fpRequest=%x:%x\n", FP_SEG(fpRequest), FP_OFF(fpRequest));
-  if (debug) cdprintf("SD: mediaCheck: &my_bpb_tbl[0]=%x:%x\n", FP_SEG(&my_bpb_tbl[drive_num]), FP_OFF(&my_bpb_tbl[drive_num]));
+  if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+  if (debug) writeToDriveLog("SD: mediaCheck()\n");
+  if (debug) writeToDriveLog("about to parse mediaCheck, ES: %x BX: %x\n", registers.es, registers.bx);
+  if (debug) writeToDriveLog("SD: mediaCheck: unit=%x\n", fpRequest->r_unit);
+  if (debug) writeToDriveLog("SD: mediaCheck: fpRequest=%x:%x\n", FP_SEG(fpRequest), FP_OFF(fpRequest));
+  if (debug) writeToDriveLog("SD: mediaCheck: &my_bpb_tbl[0]=%x:%x\n", FP_SEG(&my_bpb_tbl[drive_num]), FP_OFF(&my_bpb_tbl[drive_num]));
   
   
-  if (debug) cdprintf("SD: mediaCheck(): r_unit 0x%2xh media_descriptor = 0x%2xh r_mc_red_code: %d fpRequest: %x:%x\n", 
+  if (debug) writeToDriveLog("SD: mediaCheck(): r_unit 0x%2xh media_descriptor = 0x%2xh r_mc_red_code: %d fpRequest: %x:%x\n", 
     fpRequest->r_unit, fpRequest->r_mc_media_desc, M_NOT_CHANGED,
     FP_SEG(fpRequest), FP_OFF(fpRequest));
  
@@ -116,13 +116,13 @@ static uint16_t buildBpb (void)
 {
   uint8_t drive_num = fpRequest->r_unit;
   uint8_t media_descriptor = fpRequest->r_bpmdesc;
-  if (debug) cdprintf("SD: -----------------------------------------------\n");
-  if (debug) cdprintf("SD: buildBpb() unit=%x\n", drive_num);
-  if (debug) cdprintf("SD: buildBpb: fpRequest=%x:%x\n", FP_SEG(fpRequest), FP_OFF(fpRequest));
-  if (debug) cdprintf("SD: buildBpb: my_bpb_tbl[%u]=%x:%x\n", (uint16_t) drive_num,
+  if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+  if (debug) writeToDriveLog("SD: buildBpb() unit=%x\n", drive_num);
+  if (debug) writeToDriveLog("SD: buildBpb: fpRequest=%x:%x\n", FP_SEG(fpRequest), FP_OFF(fpRequest));
+  if (debug) writeToDriveLog("SD: buildBpb: my_bpb_tbl[%u]=%x:%x\n", (uint16_t) drive_num,
      FP_SEG(my_bpb_tbl[drive_num]), FP_OFF(my_bpb_tbl[drive_num]));
   
-  if (debug) cdprintf("SD: buildBpb(): media_descriptor=0x%2xh r_bpfat: %x:%x r_bpb_ptr: %x:%x my_bpb: %x:%x\n", 
+  if (debug) writeToDriveLog("SD: buildBpb(): media_descriptor=0x%2xh r_bpfat: %x:%x r_bpb_ptr: %x:%x my_bpb: %x:%x\n", 
       (uint16_t) media_descriptor, FP_SEG(fpRequest->r_bpfat), FP_OFF(fpRequest->r_bpfat),
       FP_SEG(fpRequest->r_bpb_ptr), FP_OFF(fpRequest->r_bpb_ptr),
       FP_SEG(&my_bpb_tbl[drive_num]), FP_OFF(&my_bpb_tbl[drive_num]));
@@ -141,20 +141,20 @@ static uint16_t IOCTLInput(void)
 
     //for the Victor disk IOCTL the datastructure is passed on thd DS:DX registers
     V9kDiskInfo far *v9k_disk_info_ptr = MK_FP(regs.ds, regs.dx);
-    if (debug) cdprintf("SD: -----------------------------------------------\n");
-    if (debug) cdprintf("SD: IOCTLInput()\n");
-    cdprintf("SD: IOCTLInput()");
-    cdprintf("SD: IOCTLInput(): di_ioctl_type = 0x%xh\n", v9k_disk_info_ptr->di_ioctl_type);
+    if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+    if (debug) writeToDriveLog("SD: IOCTLInput()\n");
+    writeToDriveLog("SD: IOCTLInput()");
+    writeToDriveLog("SD: IOCTLInput(): di_ioctl_type = 0x%xh\n", v9k_disk_info_ptr->di_ioctl_type);
     {
         switch (v9k_disk_info_ptr->di_ioctl_type)
         {
         case GET_DISK_DRIVE_PHYSICAL_INFO:
-            if (debug) cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO\n");
-            // cdprintf("SD: IOCTLInput() -AH — IOCTL function number (44h) %x", registers.ax);
-            // cdprintf("SD: IOCTLInput() -AL — IOCTL device driver read request value (4) %x", registers.ax);
-            // cdprintf("SD: IOCTLInput() -BL — drive (0 = A, 1 = B, etc.) %x", registers.bx);
-            // cdprintf("SD: IOCTLInput() -CX — length in bytes of this request structure (6) %x", registers.cx);
-            // cdprintf("SD: IOCTLInput() -DS:DX — pointer to data structure %x:%x", registers.ds, registers.dx);
+            if (debug) writeToDriveLog("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO\n");
+            // writeToDriveLog("SD: IOCTLInput() -AH — IOCTL function number (44h) %x", registers.ax);
+            // writeToDriveLog("SD: IOCTLInput() -AL — IOCTL device driver read request value (4) %x", registers.ax);
+            // writeToDriveLog("SD: IOCTLInput() -BL — drive (0 = A, 1 = B, etc.) %x", registers.bx);
+            // writeToDriveLog("SD: IOCTLInput() -CX — length in bytes of this request structure (6) %x", registers.cx);
+            // writeToDriveLog("SD: IOCTLInput() -DS:DX — pointer to data structure %x:%x", registers.ds, registers.dx);
 
             v9k_disk_info_ptr->di_ioctl_type = GET_DISK_DRIVE_PHYSICAL_INFO;
             bool failed, hard_disk, left;
@@ -165,7 +165,7 @@ static uint16_t IOCTLInput(void)
             v9k_disk_info_ptr->di_disk_type = hard_disk;
             v9k_disk_info_ptr->di_disk_location = left;
 
-            if (debug) cdprintf("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO - failed: %d\n", (int16_t) failed);
+            if (debug) writeToDriveLog("SD: IOCTLInput() - GET_DISK_DRIVE_PHYSICAL_INFO - failed: %d\n", (int16_t) failed);
 
             return S_DONE;
             break;
@@ -215,8 +215,8 @@ unsigned get_stackpointer();
 
 static uint16_t readBlock (void)
 {
-    if (debug) cdprintf("SD: -----------------------------------------------\n");
-    if (debug) cdprintf("SD: readBlock()\n");
+    if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+    if (debug) writeToDriveLog("SD: readBlock()\n");
     
     uint16_t sector_count = fpRequest->r_count;
     uint16_t start_sector = fpRequest->r_start;
@@ -229,10 +229,10 @@ static uint16_t readBlock (void)
         return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
     }
     if (debug) {
-      if (debug) cdprintf("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
+      if (debug) writeToDriveLog("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
        (uint16_t) media_descriptor, start_sector, sector_count, 
                 FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
-      if (debug) cdprintf("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
+      if (debug) writeToDriveLog("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
         (uint16_t) media_descriptor, start_sector, sector_count, 
                 FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
     }
@@ -253,7 +253,7 @@ static uint16_t readBlock (void)
     uint8_t far *data_ptr = &data[0];
     readPayload.data = data_ptr;
     readPayload.data_size = sizeof(data);
-    if (debug) cdprintf("sending data_size: %u\n", readPayload.data_size);
+    //if (debug) cdprintf("sending data_size: %u\n", readPayload.data_size);
 
       // Prepare dynamic read parameters
       readParams.sector_count = sector_count;
@@ -267,7 +267,7 @@ static uint16_t readBlock (void)
       } 
   
       //getting the response from the pico
-      if (debug) cdprintf("command sent success, starting receive response\n");
+      //if (debug) cdprintf("command sent success, starting receive response\n");
 
       Payload responsePayload = {0};
       uint8_t response_params[3] = {0};
@@ -299,17 +299,17 @@ static uint16_t readBlock (void)
 /* Write Data with Verification */
 static uint16_t write_block (bool verify)
 {
-  if (debug) cdprintf("SD: -----------------------------------------------\n");
-  if (debug) cdprintf("SD: write block: verify=%u\n", (uint16_t) verify);
+  if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+  if (debug) writeToDriveLog("SD: write block: verify=%u\n", (uint16_t) verify);
   uint16_t sector_count = fpRequest->r_count;
   uint16_t start_sector = fpRequest->r_start;
   uint8_t media_descriptor = fpRequest->r_meddesc;
   uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
   if (debug) {
-    if (debug) cdprintf("SD: write block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
+    if (debug) writeToDriveLog("SD: write block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
       (uint16_t) media_descriptor, start_sector, sector_count, 
               FP_SEG(transfer_area), FP_OFF(transfer_area));
-    if (debug) cdprintf("SD: write block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
+    if (debug) writeToDriveLog("SD: write block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
       (uint16_t) media_descriptor, start_sector, sector_count, 
               FP_SEG(transfer_area), FP_OFF(transfer_area));
   }
@@ -338,7 +338,7 @@ static uint16_t write_block (bool verify)
     writePayload.data_size = sector_count * SECTOR_SIZE;
     writePayload.data = transfer_area;
     
-    if (debug) cdprintf("sending data_size: %u\n", (uint16_t) writePayload.data_size);
+    //if (debug) cdprintf("sending data_size: %u\n", (uint16_t) writePayload.data_size);
     create_payload_crc8(&writePayload);
 
     ResponseStatus outcome = send_command_payload(&writePayload);
@@ -348,7 +348,7 @@ static uint16_t write_block (bool verify)
     } 
   
     //getting the response from the pico
-    cdprintf("command sent success, starting receive response\n");
+    //cdprintf("command sent success, starting receive response\n");
 
     Payload responsePayload = {0};
     uint8_t response_params[3] = {0};
@@ -373,21 +373,21 @@ static uint16_t write_block (bool verify)
 }
 
 static uint16_t writeNoVerify () {
-    if (debug) cdprintf("SD: -----------------------------------------------\n");
-    if (debug) cdprintf("SD: writeNoVerify()\n");
+    if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+    if (debug) writeToDriveLog("SD: writeNoVerify()\n");
     return write_block(FALSE);
 }
 
 static uint16_t writeVerify () {
-    if (debug) cdprintf("SD: -----------------------------------------------\n");
-    if (debug) cdprintf("SD: writeVerify()\n");
+    if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+    if (debug) writeToDriveLog("SD: writeVerify()\n");
     return write_block(TRUE);
 }
 
 static bool isMyUnit(int8_t unitCode) {
-  if (debug) cdprintf("SD: -----------------------------------------------\n");
-  if (debug) cdprintf("SD: isMyUnit()\n");
-  if (debug) cdprintf("SD: isMyUnit(): unitCode: %u num_drives: %u\n", (uint16_t) unitCode, (uint16_t) num_drives);
+  if (debug) writeToDriveLog("SD: -----------------------------------------------\n");
+  if (debug) writeToDriveLog("SD: isMyUnit()\n");
+  if (debug) writeToDriveLog("SD: isMyUnit(): unitCode: %u num_drives: %u\n", (uint16_t) unitCode, (uint16_t) num_drives);
   if (unitCode <= num_drives) {
     return true;
   } else {

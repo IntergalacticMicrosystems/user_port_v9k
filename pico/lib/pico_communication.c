@@ -18,6 +18,19 @@
 
 #define __no_inline_not_in_flash_func(read_burst_from_pio_fifo) __noinline __not_in_flash_func(read_burst_from_pio_fifo)
 
+static const bool DEBUG_PACKETS = false;
+
+void debug_print_payload(Payload *payload) {
+    if (DEBUG_PACKETS) {
+        printf("Protocol: %d\n", payload->protocol);
+        printf("Command: %d\n", payload->command);
+        printf("Params Size: %d\n", payload->params_size);
+        printf("Data Size: %d\n", payload->data_size);
+        printf("Status: %d\n", payload->status);
+        printf("Command CRC8: %d\n", payload->command_crc);
+        printf("Data CRC8: %d\n", payload->data_crc);
+    }
+}
 
 PIO_state* init_pio(void) {
     stdio_init_all();
@@ -154,12 +167,14 @@ void process_incoming_commands(SDState *sd_state, PIO_state *pio_state) {
             free(payload);
             continue;
         }
+        debug_print_payload(payload);
         Payload *response = dispatch_command(sd_state, pio_state, payload); 
         ResponseStatus status = transmit_response(pio_state, response);
         if (status != STATUS_OK) {
             printf("Error: Command dispatch failed\n");
         }       
-        printf("Receive command Payload successfully\n");
+        if (DEBUG_PACKETS) { printf("Receive command Payload successfully\n");}
+        debug_print_payload(response);
         free(payload->params);
         free(payload->data);
         free(payload);
@@ -177,20 +192,22 @@ uint16_t receive_utf16(PIO_state *pio_state) {
 
 ResponseStatus receive_command_payload(PIO_state *pio_state, Payload *payload) {
 
-    printf("Waiting for incoming command\n");
+    if (DEBUG_PACKETS) {printf("Waiting for incoming command\n");}
     ResponseStatus outcome = receive_command_packet(pio_state, payload);
     if (outcome != STATUS_OK) {
         printf("Error: Command packet reception failed %d\n", outcome);
         return outcome;  
     } 
-    printf("Valid CRC on command packet, receiving data packet\n");
+    if (DEBUG_PACKETS) {printf("Valid CRC on command packet, receiving data packet\n");}
     outcome = receive_data_packet(pio_state, payload);
     if (outcome != STATUS_OK) {
         printf("Error: Data packet reception failed %d\n", outcome);
         return outcome;
     }
-    printf("Valid CRC on data packet\n");
-    printf("Command payload received successfully\n");
+    if (DEBUG_PACKETS) {
+        printf("Valid CRC on data packet\n");
+        printf("Command payload received successfully\n");
+    }
     return outcome;
 }
 
@@ -202,7 +219,7 @@ void read_burst_from_pio_fifo(PIO pio, uint sm, uint8_t *receiveData, uint32_t l
 }
 
 ResponseStatus receive_command_packet(PIO_state *pio_state, Payload *payload) {
-    printf("Waiting for command packet\n");
+    if (DEBUG_PACKETS) { printf("Waiting for command packet\n"); }
     payload->protocol = (V9KProtocol) pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     if (payload->protocol == HANDSHAKE) {
         printf("Handshake protocol received instead of command_packet, retrying\n");
@@ -221,44 +238,46 @@ ResponseStatus receive_command_packet(PIO_state *pio_state, Payload *payload) {
         sendResponseStatus(pio_state, MEMORY_ALLOCATION_ERROR);
         return MEMORY_ALLOCATION_ERROR;
     }
-    printf("--------------------------\n");
-    printf("Protocol: %d, Command: %d\n", payload->protocol, payload->command);
-    printf("Recieving command parameters, size: %d\n", payload->params_size);
+    if (payload->protocol != LOG_OUTPUT) {
+        printf("--------------------------\n");
+        printf("Protocol: %d, Command: %d\n", payload->protocol, payload->command);
+    }
+    if (DEBUG_PACKETS) { printf("Recieving command parameters, size: %d\n", payload->params_size); }
     read_burst_from_pio_fifo(pio_state->pio, pio_state->rx_sm, payload->params, payload->params_size);
     payload->command_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    printf("Done getting command packet %d\n", payload->command_crc);
+    if (DEBUG_PACKETS) { printf("Done getting command packet %d\n", payload->command_crc); }
     if ( !is_valid_command_crc8(payload) ) {
         sendResponseStatus(pio_state, INVALID_CRC);  //send a CRC failure Response   
         printf("Invalid CRC on command packet\n");
         return INVALID_CRC;
     }
-    printf("Valid CRC on command packet\n");
+    if (DEBUG_PACKETS) { printf("Valid CRC on command packet\n"); }
     sendResponseStatus(pio_state, STATUS_OK);  //send a CRC success Response
     return STATUS_OK;
 }
 
 ResponseStatus receive_data_packet(PIO_state *pio_state, Payload *payload) {
-    printf("Waiting for data packet\n");
+    if (DEBUG_PACKETS) { printf("Waiting for data packet\n"); }
     payload->data_size = receive_utf16(pio_state);
-    printf("Data size: %d\n", payload->data_size);
+    if (DEBUG_PACKETS) { printf("Data size: %d\n", payload->data_size);}
     payload->data = malloc(payload->data_size);
     if (payload->data == NULL) {
         printf("Error: Memory allocation failed for payload->data buffer\n");
         sendResponseStatus(pio_state, MEMORY_ALLOCATION_ERROR);
         return MEMORY_ALLOCATION_ERROR;
     }
-    printf("Receiving data buffer\n");
+    if (DEBUG_PACKETS) { printf("Receiving data buffer\n"); }
     read_burst_from_pio_fifo(pio_state->pio, pio_state->rx_sm, payload->data, payload->data_size);
     
-    printf("Receiving data buffer completed\n");
+    if (DEBUG_PACKETS) { printf("Receiving data buffer completed\n"); }
     payload->data_crc = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
-    printf("Received CRC, Done getting data packet\n");
+    if (DEBUG_PACKETS) { printf("Received CRC, Done getting data packet\n"); }
     if ( !is_valid_data_crc8(payload) ) {
         sendResponseStatus(pio_state, INVALID_CRC);  //send a CRC failure Response
         printf("Invalid CRC on data packet\n");
         return INVALID_CRC;
     }
-    printf("Valid CRC on data packet\n");
+    if (DEBUG_PACKETS) { printf("Valid CRC on data packet\n"); }
     sendResponseStatus(pio_state, STATUS_OK);  //send a CRC success Response
     return STATUS_OK;
 }
@@ -276,40 +295,40 @@ void sendResponseStatus(PIO_state *pio_state, ResponseStatus status) {
 }
 
 ResponseStatus transmit_response(PIO_state *pio_state, Payload *payload) {
-    printf("Transmitting response\n");
+    if (DEBUG_PACKETS) { printf("Transmitting response\n"); }
     create_command_crc8(payload);
     create_data_crc8(payload);
-    printf("Transmitting protocol: %d and command: %d\n", payload->protocol, payload->command);
+    if (DEBUG_PACKETS) { printf("Transmitting protocol: %d and command: %d\n", payload->protocol, payload->command); }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->protocol);
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command);
     transmit_utf16(pio_state, payload->params_size);
-    printf("Transmitting command parameters, size: %d\n", payload->params_size);
+    if (DEBUG_PACKETS) { printf("Transmitting command parameters, size: %d\n", payload->params_size); }
     for(int i = 0; i < payload->params_size; ++i) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->params[i]);
     }
-    printf("Transmitting command CRC\n");
+    if (DEBUG_PACKETS) { printf("Transmitting command CRC\n"); }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->command_crc);
-    printf("Waiting for CRC value\n");
+    if (DEBUG_PACKETS) { printf("Waiting for CRC value\n"); }
     uint8_t crc_outcome = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     if (crc_outcome != STATUS_OK) {
         printf("Error: CRC or other failure on command portion of payload\n");
         return crc_outcome;
     }
-    printf("Transmitting data packet\n");
+    if (DEBUG_PACKETS) { printf("Transmitting data packet\n"); }
     transmit_utf16(pio_state, payload->data_size);
-    printf("Transmitting data buffer\n");
+    if (DEBUG_PACKETS) { printf("Transmitting data buffer\n"); }
     for(int i = 0; i < payload->data_size; ++i) {
         pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data[i]);
     }
-    printf("transmitting data CRC\n");
+    if (DEBUG_PACKETS) { printf("transmitting data CRC\n"); }
     pio_sm_put_blocking(pio_state->pio, pio_state->tx_sm, payload->data_crc);
 
-    printf("Waiting for CRC value\n");
+    if (DEBUG_PACKETS) { printf("Waiting for CRC value\n"); }
     crc_outcome = pio_sm_get_blocking(pio_state->pio, pio_state->rx_sm);
     if (crc_outcome != STATUS_OK) {
         printf("Error: CRC or other failure on data portion of payload\n");
         return crc_outcome;
     }
-    printf("Response transmitted successfully\n");
+    if (DEBUG_PACKETS) { printf("Response transmitted successfully\n"); }
     return STATUS_OK;
 }

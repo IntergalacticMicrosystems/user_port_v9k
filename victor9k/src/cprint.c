@@ -34,6 +34,7 @@
 #include <string.h>
 
 #include "cprint.h"     /* Console printing */
+#include "logpico.h"
 
 #define LOG_SECTOR_START 15 // Start log file at the 16th sector
 #define SECTOR_SIZE 512
@@ -256,7 +257,8 @@ void writeToDriveLog(const char* format, ...) {
     // Write the formatted message to the current position
     if (debug) {
         //writeBuffer(buffer);
-        cdprintf(buffer);
+        //cdprintf(buffer);
+        log_message(buffer, strlen(buffer));
     }
     
 }

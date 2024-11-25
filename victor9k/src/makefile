@@ -40,7 +40,7 @@ CFLAGS += -zu
 
 TARGET = userport.sys
 
-OBJ =	cstrtsys.obj template.obj cprint.obj crc8.obj v9_communication.obj devinit.obj 
+OBJ =	cstrtsys.obj logpico.obj template.obj cprint.obj crc8.obj v9_communication.obj devinit.obj 
 
 all : $(TARGET)
 
