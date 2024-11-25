@@ -138,59 +138,82 @@ typedef struct {
 
 // V9K HD Drive Label Structure
 typedef struct {
-    uint16_t label_type;        // Label Type
-    uint16_t device_id;         // Device ID
-    uint8_t serial_number[16];  // Serial Number
-    uint16_t sector_size;          // Sector Size
-
-    // IPL Vector
-    uint32_t ipl_da;            // Disk Address
-    uint16_t ipl_la;            // Load Address
-    uint16_t ipl_llength;       // Load Length
-    uint32_t ipl_entry;         // Code Entry PTR
-
-    uint16_t p_boot_vol;        // Primary Boot Volume
-    uint8_t ctrl_params[16];     // Control Parameters
-
-    // Variable Lists (Available Media List, Working Media List, Virtual Volume List)
-    uint8_t var_lists[972];
+uint16_t label_type;             // 0 = formatted, 1 = initialized
+    uint16_t device_id;              // Revision level of the drive header
+    uint8_t serial_number[16];       // Drive serial number
+    uint16_t sector_size;            // Sector size (expected to be 512)
+    // IPL vector
+    uint32_t disk_address;           // Logical disk address of the boot program image
+    uint16_t load_address;           // Paragraph address for boot load
+    uint16_t load_length;            // Length of boot program in paragraphs
+    uint32_t code_entry;             // Memory entry point of boot program
+    uint16_t primary_boot_volume;    // Volume with second IPL vector and config info
+    // Controller parameters
+    uint16_t num_cylinders;          // Number of cylinders
+    uint8_t num_heads;               // Number of heads
+    uint16_t first_rw_reduced;       // First read-write cycle cylinder for reduced write current
+    uint16_t first_write_precomp;    // First write precompensation cylinder
+    uint8_t ecc_burst_length;        // ECC burst length
+    uint8_t fast_step_control;       // Fast step control byte
+    uint8_t interleave_factor;       // Interleave factor
+    uint8_t spares[6];               // Drive serial number
 } V9kDriveLabel;
+
+// V9K Region structure for media lists
+typedef struct {
+    uint32_t physical_address;       // Disk address of the region
+    uint32_t region_size;            // Number of physical blocks in the region
+} Region;
+
+// Structure for Available Media List, Working Media List
+typedef struct {
+    uint16_t num_regions;            // Number of regions in the list
+    Region *regions;                 // Array of regions
+} MediaList;
+
+// V9K HD Virtual Volume List Structure
+typedef struct {
+    uint16_t num_volumes;            // Number of virtual volumes
+    uint32_t volume_addresses[MAX_PARTITIONS];      // Array of logical addresses for each virtual volume
+} VolumeList;
+
+typedef struct {
+        uint16_t device_unit;    // Device Unit
+        uint16_t volume_index;   // Volume Index
+} VolumeAssignment;           // Assignments (up to 16)
 
 // V9K HD Virtual Volume Label Structure
 typedef struct {
     uint16_t label_type;         // Label Type
     uint8_t volume_name[16];     // Volume Name
 
-    // IPL Vector
-    uint32_t ipl_da;             // Disk Address
-    uint16_t ipl_la;             // Load Address
-    uint16_t ipl_llength;        // Load Length
-    uint32_t ipl_entry;          // Code Entry PTR
+    // Initial Program Load [IPL] Vector
+    // This is a descriptor identifying the boot program and its
+    // location within the virtual volume. This field is used
+    // to generate the IPL vector on the drive label when
+    // configuring the primary boot volume.
+    uint32_t disk_address;       // Virtual Disk Address
+    uint16_t load_address;       // Paragraph Number Load Address
+    uint16_t load_length;        // Paragraph Count Load Length
+    uint32_t code_entry;          // Code Entry pointer memory address
 
-    uint32_t capacity;           // Volume Capacity
-    uint32_t data_start;         // Data Start
-    uint16_t block_size;         // Host Block Size
-    uint16_t au;                 // Allocation Unit
-    uint16_t dirent;             // Number of Directory Entries
-    uint8_t reserved[16];        // Reserved
-    uint8_t assign_count;        // Assignment Count
-    struct {
-        uint16_t device_unit;    // Device Unit
-        uint16_t volume_index;   // Volume Index
-    } assignments[16];           // Assignments (up to 16)
-    uint8_t extra[387];          // Remaining bytes to fill sector
-} V9kVirtualVolumeLabel;
+    uint32_t volume_capacity;    // Number of actual physical blocks in volume
+    uint32_t data_start;         // offset (in blocks) into the virtual volume for the start of data space.
+    uint16_t host_block_size;    // Host Block Size, MS-DOS = 512 the atomical unit used by the host in data trasnsfer operations.
+    //allocation unit confused me. HDSETUP shows integers that are in KB but stores this value as the number of 512 byte blocks.
+    //so entering AU = 16 in HDSEUTUP is 16KB, and the value stored here would be 32 = (16*1024/512)
+    uint16_t allocation_unit;    // Allocation Unit on media, as # of 512 byte blocks. 
+    uint16_t directory_entries;  // Number of Directory Entries @ root level
+    uint8_t reserved[16];        // Reserved for future expansion
+    
+    // Configuration Information
+    // a list of the drive assignments for a system at boot time. It is used to
+    // map logical drives to virtual volumes. This field is referenced via the label of the booted drive.
+    // this is only set on the primary boot volume. the others are set to 0. Floppy drives have a volume index of 65280 and 65281.
+    uint8_t assignment_count;         // Assignment Count, # of assignment mappings  
+    VolumeAssignment assignments[MAX_PARTITIONS]; // Assignments setting an upper boundary of 16 to ease memory management
+} VirtualVolumeLabel;
 
-typedef struct {
-    uint16_t num_cylinders;        /* Number of Cylinders */
-    uint8_t num_heads;             /* Number of Heads */
-    uint16_t reduced_current_cyl;  /* First Reduced-Current Cylinder */
-    uint16_t write_precomp_cyl;    /* First Write Precompensation Cylinder */
-    uint8_t ecc_burst_length;      /* ECC Data Burst Length */
-    uint8_t options;               /* Options */
-    uint8_t interleave;            /* Interleave */
-    uint8_t spares[6];             /* Spares (6 bytes) */
-} V9KHardDriveControlParameters;
 
 typedef struct {
     uint8_t num_units;    /*  number of disk images found   */

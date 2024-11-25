@@ -98,22 +98,21 @@ uint64_t calculate_mbr_offset(uint32_t partition_start_lba, uint32_t sector_numb
 }
 
 uint64_t calculate_victor_offset(
-    uint32_t sector_number_within_volume, // Logical sector number within the virtual volume
-    V9kMediaList *working_media_list,     // Media list describing the working regions
+    uint32_t logical_sector, // Logical sector number within the virtual volume
+    MediaList *working_media_list,     // Media list describing the working regions
     uint32_t sector_size                  // Sector size in bytes
 ) {
-    uint32_t logical_sector = sector_number_within_volume;
     uint64_t offset = 0;
 
     // Iterate over the regions to map the logical sector to a physical sector
-    for (uint8_t i = 0; i < working_media_list->region_count; i++) {
-        V9kRegionDescriptor *region = &working_media_list->regions[i];
+    for (uint8_t i = 0; i < working_media_list->num_regions; i++) {
+        Region *region = &working_media_list->regions[i];
         uint32_t region_size = region->region_size;
 
         // Check if the logical sector falls within this region
         if (logical_sector < region_size) {
             // Logical sector is within this region; calculate physical sector
-            uint32_t physical_sector = region->region_pa + logical_sector;
+            uint32_t physical_sector = region->region_size + logical_sector;
 
             // Calculate byte offset
             offset = (uint64_t)physical_sector * sector_size;
@@ -125,7 +124,7 @@ uint64_t calculate_victor_offset(
     }
 
     // If we exhaust the regions without finding a match, return an error indicator
-    printf("Error: Logical sector %u is out of bounds\n", sector_number_within_volume);
+    printf("Error: Logical sector %u is out of bounds\n", logical_sector);
     return 0xFFFFFFFFFFFFFFFF; // Return a large invalid offset to indicate failure
 }
 
@@ -149,7 +148,8 @@ int read_bpb(FIL *disk_image, uint32_t start_lba, BPB_FAT12 *bpb) {
 
     // Calculate the byte offset to the start of the first partition
     FSIZE_t offset = (FSIZE_t)start_lba * SECTOR_SIZE;
-
+    printf("Reading MBR at offset %lu\n", offset);
+    
     res = f_lseek(disk_image, offset);
     // Seek to the beginning of the first partition
     if (res != FR_OK) {
@@ -179,6 +179,7 @@ int read_sector(FIL *img_file, uint32_t partition_start_lba, uint32_t sector_num
 
     // Move the file pointer to the desired sector
     FSIZE_t offset = (FSIZE_t) calculate_mbr_offset(partition_start_lba, sector_number, SECTOR_SIZE);
+    printf("Reading sector %u at offset %lu\n", sector_number, offset);
     res = f_lseek(img_file, offset);
     if (res != FR_OK) {
         printf("f_lseek failed: %d\n", res);
@@ -256,8 +257,11 @@ int read_fat12_bpb_from_img_file(DriveImage *drive_image, VictorBPB *victor_bpb)
     victor_bpb->total_sectors = bpb.total_sectors_16;
     victor_bpb->media_descriptor = bpb.media_type;
     victor_bpb->sectors_per_fat = bpb.fat_size_16;
-   
-    drive_image->start_lba = first_partition->start_lba;
+    
+    drive_image->partitions[0] = malloc(sizeof(VirtualPartitionEntry));
+    drive_image->partitions[0]->start_lba = first_partition->start_lba;
+    drive_image->partitions[0]->end_lba = first_partition->start_lba + first_partition->size_in_sectors;
+    drive_image->partitionCount = 1;
 
     print_debug_bpb(victor_bpb);
 
@@ -276,6 +280,46 @@ void print_debug_bpb(VictorBPB *bpb) {
     printf("  Sectors per FAT: %u\n", bpb->sectors_per_fat);
 }
 
+// Function to print the disk label and lists
+void print_v9k_disk_label(const V9kDriveLabel *label, const MediaList *available_media, const MediaList *working_media, const VolumeList *virtual_volume) {
+    printf("Disk Label:\n");
+    printf("  Label Type: %d\n", label->label_type);
+    printf("  Device ID: %d\n", label->device_id);
+    printf("  Serial Number: %.16s\n", label->serial_number);
+    printf("  Sector Size: %d\n", label->sector_size);
+    printf("  Disk Address: %u\n", label->disk_address);
+    printf("  Load Address: %u\n", label->load_address);
+    printf("  Load Length: %u\n", label->load_length);
+    printf("  Code Entry: %u\n", label->code_entry);
+    printf("  Primary Boot Volume: %d\n", label->primary_boot_volume);
+    printf("  Number of Cylinders: %d\n", label->num_cylinders);
+    printf("  Number of Heads: %d\n", label->num_heads);
+    printf("  First RW Cycle: %d\n", label->first_rw_reduced);
+    printf("  First Write Precomp: %d\n", label->first_write_precomp);
+    printf("  ECC Burst Length: %d\n", label->ecc_burst_length);
+    printf("  Fast Step Control: %d\n", label->fast_step_control);
+    printf("  Interleave Factor: %d\n", label->interleave_factor);
+
+    printf("\nAvailable Media List (%d regions):\n", available_media->num_regions);
+    for (int i = 0; i < available_media->num_regions; i++) {
+        printf("  Region %d: Address = %u, Size = %u\n", i,
+               available_media->regions[i].physical_address,
+               available_media->regions[i].region_size);
+    }
+
+    printf("\nWorking Media List (%d regions):\n", working_media->num_regions);
+    for (int i = 0; i < working_media->num_regions; i++) {
+        printf("  Region %d: Address = %u, Size = %u\n", i,
+               working_media->regions[i].physical_address,
+               working_media->regions[i].region_size);
+    }
+
+    printf("\nVirtual Volume List (%d volumes):\n", virtual_volume->num_volumes);
+    for (int i = 0; i < virtual_volume->num_volumes; i++) {
+        printf("  Volume %d: Logical Address = %u\n", i, virtual_volume->volume_addresses[i]);
+    }
+}
+
 
 /* Function to parse the BPB from a FAT16 .img file */
 int parse_fat16_bpb(DriveImage *drive_image, VictorBPB *bpb) {
@@ -288,7 +332,7 @@ int parse_fat16_bpb(DriveImage *drive_image, VictorBPB *bpb) {
     size_t bytes_read;
 
     // Read MBR from sector 0
-    if (read_sector(img_file, drive_image->start_lba, 0, buffer) != 0) {
+    if (read_sector(img_file, drive_image->partitions[0]->start_lba, 0, buffer) != 0) {
         f_close(img_file);
         return -1;
     }
@@ -298,7 +342,7 @@ int parse_fat16_bpb(DriveImage *drive_image, VictorBPB *bpb) {
     printf("First partition starts at sector: %u\n", partition_start);
 
     // Read the boot sector of the first partition
-    if (read_sector(img_file, drive_image->start_lba, partition_start, boot_sector) != 0) {
+    if (read_sector(img_file, drive_image->partitions[0]->start_lba, partition_start, boot_sector) != 0) {
         f_close(img_file);
         return -1;
     }
@@ -318,12 +362,13 @@ int parse_fat16_bpb(DriveImage *drive_image, VictorBPB *bpb) {
     return 0; /* Success */
 }
 
-int build_bpbs_from_v9k_disk_label(DriveImage *drive_image, VictorBPB bpb[], uint8_t max_units) {
+int build_bpbs_from_v9k_disk_label(uint8_t img_num, DriveImage *drive_image[], VictorBPB *bpb, uint8_t max_units) {
     
     uint8_t result;
     int vol;
     size_t bytes_read;
-    FIL *img_file = drive_image->img_file;
+    FIL *img_file = drive_image[img_num]->img_file;
+    drive_image[img_num]->partitionCount = 0;
 
     // Read and parse the drive label
     V9kDriveLabel *drive_label = malloc(sizeof(V9kDriveLabel));
@@ -334,49 +379,70 @@ int build_bpbs_from_v9k_disk_label(DriveImage *drive_image, VictorBPB bpb[], uin
     }
 
     // Parse variable drive metadata lists
-    V9kMediaList *available_media_list = NULL;
-    V9kMediaList *working_media_list = NULL;
-    V9kVolumeList *volume_list = NULL;
+    MediaList *available_media_list = malloc(sizeof(MediaList));
+    MediaList *working_media_list = malloc(sizeof(MediaList));
+    VolumeList *volume_list = malloc(sizeof(V9kVolumeList));
 
-    result = parse_var_lists(drive_label, available_media_list, working_media_list, volume_list);
-    if (result != 0) {
-        printf("Error parsing variable lists\n");
+    if (!available_media_list || !working_media_list || !volume_list) {
+        printf("Memory allocation failed with media lists");
         return -1;
     }
 
-    V9KHardDriveControlParameters *ctrl_params = (V9KHardDriveControlParameters *) &drive_label->ctrl_params;
+    result = parse_media_list(img_file, available_media_list);
+    if (result != 0) {
+        printf("Error parsing available_media_list\n");
+        return -1;
+    }
+
+    result = parse_media_list(img_file, working_media_list);
+    if (result != 0) {
+        printf("Error parsing working_media_list\n");
+        return -1;
+    }
+
+    result = parse_volume_list(img_file, volume_list);
+    if (result != 0) {
+        printf("Error parsing volume_list\n");
+        return -1;
+    }
     
     // Populate BPBs for each virtual volume
-    for (vol = 0; vol < volume_list->volume_count; vol++) {
+    for (vol = 0; vol < volume_list->num_volumes; vol++) {
         if (vol >= max_units) {
             printf("Reached maximum number of units\n");
             return vol;
         }
-        V9kVirtualVolumeLabel *volume_label = malloc(sizeof(V9kVirtualVolumeLabel));
+        VirtualVolumeLabel *volume_label = malloc(sizeof(VirtualVolumeLabel));
         result = read_virtual_volume_label(img_file, volume_list->volume_addresses[vol], volume_label);
         if (result != 0) {
             printf("Error reading virtual volume label\n");
             return vol;
         }
+        drive_image[img_num]->partitions[vol] = malloc(sizeof(VirtualPartitionEntry));
+        uint32_t start_lba = volume_list->volume_addresses[vol] + volume_label->data_start;
+        drive_image[img_num]->partitions[vol]->start_lba = start_lba;
+        drive_image[img_num]->partitions[vol]->end_lba = start_lba + volume_label->volume_capacity - 1;
+        drive_image[img_num]->partitionCount++;
 
         /* Populate the BPB structure */
-        bpb[vol].bytes_per_sector = drive_label->sector_size;
-        bpb[vol].sectors_per_cluster = volume_label->au;
-        bpb[vol].reserved_sectors = 1; // Typically, boot sector is reserved
+        bpb[vol].bytes_per_sector = volume_label->host_block_size;
+        bpb[vol].sectors_per_cluster = volume_label->allocation_unit;
+        bpb[vol].reserved_sectors = volume_label->data_start; // First volumes have parition info, others start at 0.
         bpb[vol].num_fats = 2; // Standard value
-        bpb[vol].root_entry_count = volume_label->dirent;
-        bpb[vol].total_sectors = (uint16_t)volume_label->capacity;
+        bpb[vol].root_entry_count = volume_label->directory_entries;
+        bpb[vol].total_sectors = (uint16_t)volume_label->volume_capacity;
         bpb[vol].media_descriptor = 0xF8; // Standard hard disk media descriptor
 
         // Calculate sectors per FAT
-        uint32_t root_dir_sectors = (volume_label->dirent * 32 + drive_label->sector_size - 1) / drive_label->sector_size;
-        uint32_t data_sectors = volume_label->capacity - (bpb[vol].reserved_sectors + root_dir_sectors);
-        uint32_t total_clusters = data_sectors / volume_label->au;
+        uint32_t root_dir_sectors = (volume_label->directory_entries * 32 + drive_label->sector_size - 1) / drive_label->sector_size;
+        uint32_t data_sectors = volume_label->volume_capacity - (bpb[vol].reserved_sectors + root_dir_sectors);
+        uint32_t total_clusters = data_sectors / volume_label->allocation_unit;
 
         // FAT size depends on total clusters (assume FAT16 for simplicity)
         bpb[vol].sectors_per_fat = (total_clusters * 2 + drive_label->sector_size - 1) / drive_label->sector_size;
 
         print_debug_bpb(&bpb[vol]);
+        print_v9k_disk_label(drive_label, available_media_list, working_media_list, volume_list);
         free(volume_label);
 
     }
@@ -445,6 +511,7 @@ SDState* initialize_sd_state(const char *directory) {
             //sdState->file_names[sdState->fileCount][FILENAME_MAX_LENGTH - 1] = '\0';
             sdState->images[sdState->fileCount] = malloc(sizeof(DriveImage));
             sdState->images[sdState->fileCount]->img_file = malloc(sizeof(FIL));
+            sdState->images[sdState->fileCount]->partitionCount = 0;
             if (!sdState->images[sdState->fileCount]->img_file) {
                 perror("Failed to allocate FIL");
                 // Handle cleanup and error
@@ -523,7 +590,7 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
         printf("Parsing BPB for %s\n", sdState->file_names[i]);
         if (strcasestr(sdState->file_names[i], "_v9k") != 0) {
             //each V9k disk image has multiple volumes, so we need to build BPBs for each volume
-            uint8_t volumes = build_bpbs_from_v9k_disk_label(sdState->images[i], initPayload->bpb_array, (MAX_IMG_FILES - i));
+            uint8_t volumes = build_bpbs_from_v9k_disk_label(i, sdState->images, initPayload->bpb_array, (MAX_IMG_FILES - i));
             if (volumes == 0) {
                 printf("Error parsing BPB for %s\n", sdState->file_names[i]);
             }

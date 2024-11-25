@@ -24,6 +24,7 @@ typedef enum {
   } V9KProtocol;
 
 #define MAX_IMG_FILES 9
+#define MAX_PARTITIONS 16
 #define FILENAME_MAX_LENGTH 260
 #define SECTOR_SIZE 512
 #define BUFFER_SECTOR_SIZE 10

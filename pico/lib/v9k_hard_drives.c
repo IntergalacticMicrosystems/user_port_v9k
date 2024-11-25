@@ -11,6 +11,10 @@
 #include "pico_common.h"
 #include "sd_block_device.h"
 
+// Function to correct endianness of a 16-bit value
+uint16_t fix_endianness(uint16_t value) {
+    return (value >> 8) | (value << 8);
+}
 
 // Function to Read the V9K Drive Label from the Disk Image
 int read_drive_label(FIL *disk_image, V9kDriveLabel *drive_label) {
@@ -24,82 +28,64 @@ int read_drive_label(FIL *disk_image, V9kDriveLabel *drive_label) {
         return -1;
     }
 
+    // Correct the endianness of a few fields. Some of the values were stored in big-endian 
+    // format, so we need to fix them. The victor docs defined these values like: 
+    // # Cylinders BYTE(Hi) 00Hex
+    //             BYTE(Lo) E6Hex (=230)
+    // the other utf16_t / utf32_t values were defined as WORDs and read as little-endian
+    drive_label->num_cylinders = fix_endianness(drive_label->num_cylinders);
+    drive_label->first_rw_reduced = fix_endianness(drive_label->first_rw_reduced);
+    drive_label->first_write_precomp = fix_endianness(drive_label->first_write_precomp);
+
     return 0;
 }
 
 // Function to Parse the V9K Variable Lists from the Drive Label
-int parse_var_lists(V9kDriveLabel *drive_label, V9kMediaList *available_media_list, V9kMediaList *working_media_list, V9kVolumeList *volume_list) {
-    uint8_t *ptr = drive_label->var_lists;
-    uint8_t *end_ptr = drive_label->var_lists + sizeof(drive_label->var_lists);
+int parse_media_list(FIL *disk_image, MediaList *media_list) {
+    FRESULT res;
+    UINT bytes_read;
 
-    // Parse Available Media List
-    if (ptr >= end_ptr) {
-        printf("Error parsing Available Media List\n");
+    // Read Available Media List
+    res = f_read(disk_image, &media_list->num_regions, sizeof(uint8_t), &bytes_read);
+    if (bytes_read != 1) {
+        printf("Error reading Available Media List count");
         return -1;
     }
-    available_media_list->region_count = *ptr++;
-    if (available_media_list->region_count > 0) {
-        size_t regions_size = available_media_list->region_count * sizeof(V9kRegionDescriptor);
-        if (ptr + regions_size > end_ptr) {
-            printf("Error parsing Available Media List regions\n");
-            return -1;
-        }
-        available_media_list->regions = malloc(regions_size);
-        if (!available_media_list->regions) {
-            printf("Error allocating memory for Available Media List regions");
-            return -1;
-        }
-        memcpy(available_media_list->regions, ptr, regions_size);
-        ptr += regions_size;
-    }
 
-    // Parse Working Media List
-    if (ptr >= end_ptr) {
-        printf("Error parsing Working Media List\n");
+    media_list->regions = malloc(media_list->num_regions * sizeof(Region));
+    res = f_read(disk_image, media_list->regions, media_list->num_regions * sizeof(Region), &bytes_read);
+    if (bytes_read != media_list->num_regions * sizeof(Region)) {
+        printf("Error reading Available Media List regions");
+        free(media_list->regions);
         return -1;
     }
-    working_media_list->region_count = *ptr++;
-    if (working_media_list->region_count > 0) {
-        size_t regions_size = working_media_list->region_count * sizeof(V9kRegionDescriptor);
-        if (ptr + regions_size > end_ptr) {
-            printf("Error parsing Working Media List regions\n");
-            return -1;
-        }
-        working_media_list->regions = malloc(regions_size);
-        if (!working_media_list->regions) {
-            printf("Error allocating memory for Working Media List regions");
-            return -1;
-        }
-        memcpy(working_media_list->regions, ptr, regions_size);
-        ptr += regions_size;
-    }
 
-    // Parse Virtual Volume List
-    if (ptr >= end_ptr) {
-        printf("Error parsing Virtual Volume List\n");
+    return 0;
+}
+
+// Function to Parse the Virtual Volume List from the Drive Label
+int parse_volume_list(FIL *disk_image, VolumeList *volume_list) {
+    FRESULT res;
+    UINT bytes_read;
+
+    // Read Available Media List
+    res = f_read(disk_image, &volume_list->num_volumes, sizeof(uint8_t), &bytes_read);
+    if (bytes_read != 1) {
+        printf("Error reading Virtual Volume List count");
         return -1;
     }
-    volume_list->volume_count = *ptr++;
-    if (volume_list->volume_count > 0) {
-        size_t volumes_size = volume_list->volume_count * sizeof(uint32_t);
-        if (ptr + volumes_size > end_ptr) {
-            printf("Error parsing Virtual Volume List addresses\n");
-            return -1;
-        }
-        volume_list->volume_addresses = malloc(volumes_size);
-        if (!volume_list->volume_addresses) {
-            printf("Error allocating memory for Virtual Volume List addresses");
-            return -1;
-        }
-        memcpy(volume_list->volume_addresses, ptr, volumes_size);
-        ptr += volumes_size;
+
+    res = f_read(disk_image, volume_list->volume_addresses, volume_list->num_volumes * sizeof(uint32_t), &bytes_read);
+    if (bytes_read != volume_list->num_volumes * sizeof(uint32_t)) {
+        printf("Error reading Virtual Volume List addresses");
+        return -1;
     }
 
     return 0;
 }
 
 // Function to Read a V9K Virtual Volume Label from the Disk Image
-int read_virtual_volume_label(FIL *disk_image, uint32_t volume_address, V9kVirtualVolumeLabel *vir_volume_label) {
+int read_virtual_volume_label(FIL *disk_image, uint32_t volume_address, VirtualVolumeLabel *vir_volume_label) {
     FRESULT res;
     UINT bytes_read;   
 
@@ -111,8 +97,8 @@ int read_virtual_volume_label(FIL *disk_image, uint32_t volume_address, V9kVirtu
         return -1;
     }
 
-    res = f_read(disk_image, vir_volume_label, sizeof(V9kVirtualVolumeLabel), &bytes_read); 
-    if (bytes_read != sizeof(V9kVirtualVolumeLabel)) {
+    res = f_read(disk_image, vir_volume_label, sizeof(VirtualVolumeLabel), &bytes_read); 
+    if (bytes_read != sizeof(VirtualVolumeLabel)) {
         printf("Error reading virtual volume label");
         return -1;
     }
