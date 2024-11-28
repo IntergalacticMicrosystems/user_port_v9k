@@ -281,17 +281,18 @@ uint16_t deviceInit( void ) {
     }
     #endif
 
-    if (debug) cdprintf("checking CS: %x DS: %x\n", registers.cs, registers.ds);
+    if (debug) writeToDriveLog("checking CS: %x DS: %x\n", registers.cs, registers.ds);
     //parsing the response
-    if (debug) cdprintf("received response, parsing data\n");
-    if (debug) cdprintf("SD: sizeof(InitPayload): %u responsePayload.data_size: %u\n", sizeof(InitPayload), responsePayload.data_size);
+    if (debug) writeToDriveLog("received response, parsing data\n");
+    if (debug) writeToDriveLog("SD: sizeof(InitPayload): %u responsePayload.data_size: %u\n", sizeof(InitPayload), responsePayload.data_size);
     if (responsePayload.data_size > sizeof(InitPayload)) {
         if (debug) cdprintf("SD: ERROR: responsePayload.data_size > sizeof(InitPayload)\n");
+        if (debug) writeToDriveLog("SD: ERROR: responsePayload.data_size > sizeof(InitPayload)\n");
         return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
     }
     InitPayload *init_details= (InitPayload *) &responsePayload.data[0];
-    if (debug) cdprintf("SD: num_drives: %d\n", init_details->num_units);
-    if (debug) cdprintf("SD: sizeof(init_details): %u\n", sizeof(*init_details));
+    if (debug) writeToDriveLog("SD: num_drives: %d\n", init_details->num_units);
+    if (debug) writeToDriveLog("SD: sizeof(init_details): %u\n", sizeof(*init_details));
 
     num_drives = init_details->num_units;
     fpRequest->r_nunits = num_drives;         //tell DOS how many drives we're instantiating.
@@ -299,6 +300,7 @@ uint16_t deviceInit( void ) {
 
     if (!validate_far_ptr(my_bpb_tbl_far_ptr, (sizeof(my_bpb_tbl[0])*num_drives))) {
         if (debug) cdprintf("SD: my_bpb_tbl_far_ptr address\n");
+        if (debug) writeToDriveLog("SD: my_bpb_tbl_far_ptr address\n");
         return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
     }
     fpRequest->r_bpb_tbl_ptr = (bpb * __far *) my_bpb_tbl_far_ptr;  // Pass to DOS the far pointer to our array of bpb poitners
@@ -318,19 +320,19 @@ uint16_t deviceInit( void ) {
     }
     
     if (debug) {
-        cdprintf("SD: done parsing &my_bpbs[0]: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
-        cdprintf("SD: done parsing &my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
-        cdprintf("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
-        cdprintf("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(registers.ds));
-        cdprintf("SD: r_unit: %x\n", fpRequest->r_unit);
+        if (debug) writeToDriveLog("SD: done parsing &my_bpbs[0]: = %4x:%4x\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]));
+        if (debug) writeToDriveLog("SD: done parsing &my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
+        if (debug) writeToDriveLog("SD: done parsing my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
+        if (debug) writeToDriveLog("SD: done parsing registers.cs = %4x:%4x\n", FP_SEG(registers.cs), FP_OFF(registers.ds));
+        if (debug) writeToDriveLog("SD: r_unit: %x\n", fpRequest->r_unit);
     }
 
     uint32_t bpb_start = calculateLinearAddress(FP_SEG(my_bpb_tbl_far_ptr) , FP_OFF(my_bpb_tbl_far_ptr));
 
     if (debug) {
-        cdprintf("SD: my_bpb = %4x:%4x  %5X\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]), bpb_start);
+        writeToDriveLog("SD: my_bpb = %4x:%4x  %5X\n", FP_SEG(&my_bpbs[0]), FP_OFF(&my_bpbs[0]), bpb_start);
         writeToDriveLog("SD: my_bpb_tbl_far_ptr = %4x:%4x  %5X\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr), bpb_start);
-        cdprintf("SD: initialized on DOS drive %c r_firstunit: %d r_nunits: %d\n",(
+        writeToDriveLog("SD: initialized on DOS drive %c r_firstunit: %d r_nunits: %d\n",(
             fpRequest->r_firstunit + 'A'), fpRequest->r_firstunit, fpRequest->r_nunits);
     
     }
@@ -338,34 +340,34 @@ uint16_t deviceInit( void ) {
     // /* All is well.  Tell DOS how many units and the BPBs... */
     uint8_t i;
     for (i=0; i < num_drives; i++) {
-        if (debug) {cdprintf("SD:  my_drives: %d drive %c\n", i, (fpRequest->r_firstunit + i + 'A'));}
+        if (debug) {writeToDriveLog("SD:  my_drives: %d drive %c\n", i, (fpRequest->r_firstunit + i + 'A'));}
     }
     initNeeded = false;
 
 
     if (debug) {   
-      cdprintf("SD: BPB data:\n");
+      writeToDriveLog("SD: BPB data:\n");
       for (int i = 0; i < num_drives; i++) {
-        cdprintf("Drive %c %d\n", (fpRequest->r_firstunit + i + 'A'), i);
-        cdprintf("&my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
-        cdprintf("my_bpb_tbl_far_ptr= %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
-        cdprintf("&my_bpb_tbl[%d] FP_SEG = %4x:%4x\n", i, FP_SEG(&my_bpb_tbl[i]), FP_OFF(&my_bpb_tbl[i]));
-        cdprintf("my_bpb_tbl[%d] = %4x:%4x\n", i, FP_SEG(my_bpb_tbl[i]), FP_OFF(my_bpb_tbl[i]));
-        cdprintf("&my_bpbs[%d] = %4x:%4x\n", i, FP_SEG(&my_bpbs[i]), FP_OFF(&my_bpbs[i]));
-        cdprintf("Bytes per Sector: %d\n", my_bpbs[i].bpb_nbyte);
-        cdprintf("Sectors per Allocation Unit: %d\n", (uint16_t) my_bpbs[i].bpb_nsector);
-        cdprintf("# Reserved Sectors: %d\n", my_bpbs[i].bpb_nreserved);
-        cdprintf("# FATs: %d\n", (uint16_t) my_bpbs[i].bpb_nfat);
-        cdprintf("# Root Directory entries: %d  ", my_bpbs[i].bpb_ndirent);
-        cdprintf("Size in sectors: %u\n", my_bpbs[i].bpb_nsize);
-        cdprintf("MEDIA Descriptor Byte: %x\n", (uint16_t) my_bpbs[i].bpb_mdesc);
-        cdprintf("FAT size in sectors: %u\n", (uint16_t) my_bpbs[i].bpb_nfsect);
+        writeToDriveLog("Drive %c %d\n", (fpRequest->r_firstunit + i + 'A'), i);
+        writeToDriveLog("&my_bpb_tbl_far_ptr = %4x:%4x\n", FP_SEG(&my_bpb_tbl_far_ptr), FP_OFF(&my_bpb_tbl_far_ptr));
+        writeToDriveLog("my_bpb_tbl_far_ptr= %4x:%4x\n", FP_SEG(my_bpb_tbl_far_ptr), FP_OFF(my_bpb_tbl_far_ptr));
+        writeToDriveLog("&my_bpb_tbl[%d] FP_SEG = %4x:%4x\n", i, FP_SEG(&my_bpb_tbl[i]), FP_OFF(&my_bpb_tbl[i]));
+        writeToDriveLog("my_bpb_tbl[%d] = %4x:%4x\n", i, FP_SEG(my_bpb_tbl[i]), FP_OFF(my_bpb_tbl[i]));
+        writeToDriveLog("&my_bpbs[%d] = %4x:%4x\n", i, FP_SEG(&my_bpbs[i]), FP_OFF(&my_bpbs[i]));
+        writeToDriveLog("Bytes per Sector: %d\n", my_bpbs[i].bpb_nbyte);
+        writeToDriveLog("Sectors per Allocation Unit: %d\n", (uint16_t) my_bpbs[i].bpb_nsector);
+        writeToDriveLog("# Reserved Sectors: %d\n", my_bpbs[i].bpb_nreserved);
+        writeToDriveLog("# FATs: %d\n", (uint16_t) my_bpbs[i].bpb_nfat);
+        writeToDriveLog("# Root Directory entries: %d  ", my_bpbs[i].bpb_ndirent);
+        writeToDriveLog("Size in sectors: %u\n", my_bpbs[i].bpb_nsize);
+        writeToDriveLog("MEDIA Descriptor Byte: %x\n", (uint16_t) my_bpbs[i].bpb_mdesc);
+        writeToDriveLog("FAT size in sectors: %u\n", (uint16_t) my_bpbs[i].bpb_nfsect);
       }
-      cdprintf("SD: &transient_data = %4x:%4x\n", FP_SEG(&transient_data), FP_OFF(&transient_data));
-      cdprintf("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(fpRequest->r_endaddr));
+      writeToDriveLog("SD: &transient_data = %4x:%4x\n", FP_SEG(&transient_data), FP_OFF(&transient_data));
+      writeToDriveLog("SD: fpRequest->r_endaddr = %4x:%4x\n", FP_SEG(fpRequest->r_endaddr), FP_OFF(fpRequest->r_endaddr));
     }
-    if (debug) cdprintf("done parsing, CS: %x DS: %x\n", registers.cs, registers.ds);
-    if (debug) cdprintf("returing SD_DONE from init()\n");
+    if (debug) writeToDriveLog("done parsing, CS: %x DS: %x\n", registers.cs, registers.ds);
+    if (debug) writeToDriveLog("returing SD_DONE from init()\n");
   return S_DONE;    
 }
 
