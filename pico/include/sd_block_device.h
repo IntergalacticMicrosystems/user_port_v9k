@@ -7,14 +7,9 @@
 #include "../sdio-fatfs/src/ff15/source/ff.h"
 
 typedef struct {
-    uint32_t start_lba;
-    uint32_t end_lba;
-} VirtualPartitionEntry;
-
-typedef struct {
     FIL *img_file;
-    VirtualPartitionEntry *partitions[MAX_PARTITIONS];
-    int partitionCount;
+    uint32_t start_lba;    //offset within the image file for multi-partition images
+    uint32_t end_lba;
 } DriveImage;
 
 typedef struct {

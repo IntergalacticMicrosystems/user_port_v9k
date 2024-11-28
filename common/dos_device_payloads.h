@@ -138,7 +138,7 @@ typedef struct {
 
 // V9K HD Drive Label Structure
 typedef struct {
-uint16_t label_type;             // 0 = formatted, 1 = initialized
+    uint16_t label_type;             // 0 = formatted, 1 = initialized
     uint16_t device_id;              // Revision level of the drive header
     uint8_t serial_number[16];       // Drive serial number
     uint16_t sector_size;            // Sector size (expected to be 512)
