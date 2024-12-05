@@ -295,7 +295,7 @@ void sendResponseStatus(PIO_state *pio_state, ResponseStatus status) {
 }
 
 ResponseStatus transmit_response(PIO_state *pio_state, Payload *payload) {
-    if (DEBUG_PACKETS) { printf("Transmitting response\n"); }
+    //printf("Transmitting response packet\n"); 
     create_command_crc8(payload);
     create_data_crc8(payload);
     if (DEBUG_PACKETS) { printf("Transmitting protocol: %d and command: %d\n", payload->protocol, payload->command); }

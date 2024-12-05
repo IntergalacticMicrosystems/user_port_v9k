@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stddef.h>
 
 #include "../../common/protocols.h"
 #include "../../common/dos_device_payloads.h"
@@ -21,13 +22,25 @@ int read_drive_label(FIL *disk_image, V9kDriveLabel *drive_label) {
     FRESULT res;
     UINT bytes_read;
 
-    // Read sector 0 (512 bytes)
+    // Read drive label from sector 0 of disk image
+    res = f_rewind(disk_image);
+    if (res != FR_OK) {
+        printf("Error rewinding disk image\n");
+        return -1;
+    }
     res = f_read(disk_image, drive_label, sizeof(V9kDriveLabel), &bytes_read);
     if (bytes_read != sizeof(V9kDriveLabel)) {
         printf("Error reading drive label bytes_read: %d, sizeof(V9kDriveLabel): %d\n", bytes_read, sizeof(V9kDriveLabel));
         return -1;
     }
 
+    printf("Size of V9kDriveLabel: %zu\n", sizeof(V9kDriveLabel));
+    printf("Offsets: label_type: %zu, device_id: %zu, serial_number: %zu num_cylinders: %zu\n",
+       offsetof(V9kDriveLabel, label_type),
+       offsetof(V9kDriveLabel, device_id),
+       offsetof(V9kDriveLabel, serial_number),
+       offsetof(V9kDriveLabel, num_cylinders));
+    
     // Correct the endianness of a few fields. Some of the values were stored in big-endian 
     // format, so we need to fix them. The victor docs defined these values like: 
     // # Cylinders BYTE(Hi) 00Hex

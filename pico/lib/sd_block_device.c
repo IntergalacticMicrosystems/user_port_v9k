@@ -436,7 +436,7 @@ int build_bpbs_from_v9k_disk_label(uint8_t img_num, DriveImage *drive_image[], V
             continue; // Skip maintenance volume entries
         }
 
-        uint32_t start_lba = volume_list.volume_addresses[vol] + volume_label.data_start;
+        uint32_t start_lba = volume_list.volume_addresses[vol];
         drive_image[img_num]->start_lba = start_lba;
         drive_image[img_num]->end_lba = start_lba + volume_label.volume_capacity - 1;
 
@@ -455,7 +455,8 @@ int build_bpbs_from_v9k_disk_label(uint8_t img_num, DriveImage *drive_image[], V
         uint32_t total_clusters = data_sectors / volume_label.allocation_unit;
 
         // FAT size depends on total clusters (assume FAT16 for simplicity)
-        bpb[vol].sectors_per_fat = (total_clusters * 2 + drive_label.sector_size - 1) / drive_label.sector_size;
+        //bpb[vol].sectors_per_fat = (total_clusters * 2 + drive_label.sector_size - 1) / drive_label.sector_size;
+        bpb[vol].sectors_per_fat = 11;
 
         print_v9k_disk_label(&drive_label, &available_media_list, &working_media_list, &volume_list, &volume_label);
         print_debug_bpb(&bpb[vol]);
@@ -614,6 +615,10 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
         }
     }
 
+    for (int i = 0; i < num_drives; i++) {
+        printf("BPB for drive %d %c %s\n", i, (i + 'C'), sdState->file_names[i]);
+        print_debug_bpb(&initPayload->bpb_array[i]);
+    }
     //return the drive information to the Victor 9000
     response->data = (uint8_t *)initPayload;
     response->data_size = (sizeof(InitPayload));
@@ -698,6 +703,7 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data = buffer;
     response->status = STATUS_OK;
     printf("sd_read Read %u bytes\n", bytesRead);
+    printf("sd_write Read %.40s\n", response->data);
     create_command_crc8(response);
     create_data_crc8(response);
     
@@ -757,6 +763,10 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data[0] = 0;
     response->status = STATUS_OK;
     printf("sd_write Wrote %u bytes\n", bytesWriten);
+    printf("sd_write Wrote %.40s\n", payload->data);
+    printf("sd_write Wrote %x ", payload->data[0]);
+    printf("sd_write Wrote %x ", payload->data[1]);
+    printf("sd_write Wrote %x\n", payload->data[2]);
     create_command_crc8(response);
     create_data_crc8(response);
     

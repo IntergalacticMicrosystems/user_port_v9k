@@ -163,6 +163,12 @@ void writeToDriveLog(const char* format, ...) {
                     }
                     break;
                 }
+                case 'c': {
+                    char ch = va_arg(args, int);
+                    *bufferPtr++ = ch;
+                    remainingSize--;
+                    break;
+                }
                 case 's': {
                     char *str = va_arg(args, char*);
                     while (*str && remainingSize > 0) {
