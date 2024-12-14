@@ -25,12 +25,12 @@ CC = wcc
 AS = wasm
 LD = wlink
 RM = rm -f
-CFLAGS  = -0 -bt=dos -ms -q -s -osh -w4 -za99 -I../../common
+CFLAGS  = -0 -bt=dos -ms -q -s -osh -w4 -za99 -I../../common -I/Users/pauldevine/projects/open-watcom-v2/rel/h
 ASFLAGS = -bt=DOS -zq -mt -0
 LDFLAGS =	SYSTEM dos &
 			ORDER clname HEADER clname DATA clname CODE clname BSS clname INIT &
 			DISABLE 1014 OPTION QUIET, STATICS, MAP=user_port.map &
-			LIBPATH /Users/pauldevine/projects/rel/lib286/dos LIBRARY clibs.lib
+			LIBPATH /Users/pauldevine/projects/open-watcom-v2/rel/lib286/dos LIBRARY clibs.lib
 
 !ifdef USE_INTERNAL_STACK
 CFLAGS += -DUSE_INTERNAL_STACK -DSTACK_SIZE=4096
