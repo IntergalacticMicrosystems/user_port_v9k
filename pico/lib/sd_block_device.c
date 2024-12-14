@@ -703,7 +703,12 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data = buffer;
     response->status = STATUS_OK;
     printf("sd_read Read %u bytes\n", bytesRead);
-    printf("sd_write Read %.40s\n", response->data);
+    printf("sd_read Read %.40s\n", response->data);
+    printf("sd_read Read: ");
+    for (int i = 0; i < 40; i++) {
+        printf(" %x", response->data[i]);
+    }
+    printf("\n");
     create_command_crc8(response);
     create_data_crc8(response);
     
@@ -764,9 +769,11 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->status = STATUS_OK;
     printf("sd_write Wrote %u bytes\n", bytesWriten);
     printf("sd_write Wrote %.40s\n", payload->data);
-    printf("sd_write Wrote %x ", payload->data[0]);
-    printf("sd_write Wrote %x ", payload->data[1]);
-    printf("sd_write Wrote %x\n", payload->data[2]);
+    printf("sd_write Wrote: ");
+    for (int i = 0; i < 40; i++) {
+        printf(" %x", payload->data[i]);
+    }
+    printf("\n");
     create_command_crc8(response);
     create_data_crc8(response);
     

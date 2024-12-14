@@ -228,14 +228,9 @@ static uint16_t readBlock (void)
         if (debug) cdprintf("SD: Invalid transfer buffer address\n");
         return (S_DONE | S_ERROR | E_GENERAL_FAILURE);
     }
-    if (debug) {
-      if (debug) writeToDriveLog("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
+    if (debug) writeToDriveLog("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
        (uint16_t) media_descriptor, start_sector, sector_count, 
                 FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
-      if (debug) writeToDriveLog("SD: read block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
-        (uint16_t) media_descriptor, start_sector, sector_count, 
-                FP_SEG(fpRequest->r_trans), FP_OFF(fpRequest->r_trans));
-    }
 
     //Prepare satic payload Params
     Payload readPayload = {0};
@@ -305,14 +300,10 @@ static uint16_t write_block (bool verify)
   uint16_t start_sector = fpRequest->r_start;
   uint8_t media_descriptor = fpRequest->r_meddesc;
   uint8_t far *transfer_area = (uint8_t far *)fpRequest->r_trans;
-  if (debug) {
-    if (debug) writeToDriveLog("SD: write block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
+  
+  if (debug) writeToDriveLog("SD: write block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
       (uint16_t) media_descriptor, start_sector, sector_count, 
               FP_SEG(transfer_area), FP_OFF(transfer_area));
-    if (debug) writeToDriveLog("SD: write block: media_descriptor=0x%2xh, start=%u, count=%u, r_trans=%x:%x\n",
-      (uint16_t) media_descriptor, start_sector, sector_count, 
-              FP_SEG(transfer_area), FP_OFF(transfer_area));
-  }
 
   if (initNeeded)  return (S_DONE | S_ERROR | E_NOT_READY); //not initialized yet
  
