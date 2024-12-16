@@ -342,9 +342,10 @@ static uint16_t write_block (bool verify)
     //cdprintf("command sent success, starting receive response\n");
 
     Payload responsePayload = {0};
+    uint8_t reponse_data = 0;
     uint8_t response_params[3] = {0};
     responsePayload.params = &response_params[0];
-    responsePayload.data = transfer_area;
+    responsePayload.data = reponse_data;
     responsePayload.data_size = sector_count * SECTOR_SIZE;
     outcome = receive_response(&responsePayload);
     if (outcome != STATUS_OK) {
