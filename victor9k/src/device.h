@@ -408,7 +408,6 @@ typedef struct {
     struct {
       int8_t _r_media_desc;       /*  MEDIA Descriptor    */
       int8_t _r_ret_code;         /*  Return Code         */
-      int8_t __far * _r_vid;      /*  volume id */
     } _r_media;
     struct {
       int8_t _r_meddesc;          /*  MEDIA Descriptor    */
@@ -420,7 +419,6 @@ typedef struct {
       int8_t far *_r_trans;       /*  Transfer Address    */
       uint16_t _r_count;          /*  Byte/Sector Count   */
       uint16_t _r_start;          /*  Starting Sector No. */
-      int8_t __far * _r_vid;      /*  Pointer to volume id */
     } _r_rw;
     struct {
       unsigned char _r_ndbyte;  /*  Byte Read From Device       */
