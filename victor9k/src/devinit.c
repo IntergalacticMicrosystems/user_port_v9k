@@ -68,7 +68,7 @@ static bool validate_far_ptr(void far *ptr, size_t size); // Function to validat
 //1063 is observed from running on the Victor9K.
 #define MAX_INIT_PAYLOAD_SIZE 1063  
 
-bool debug = true;
+bool debug = false;
 static uint8_t portbase;
 static uint8_t partition_number = 0;
 //
@@ -117,9 +117,11 @@ uint16_t deviceInit( void ) {
     fpRequest->r_endaddr = MK_FP(registers.cs, &transient_data);
     struct device_header far *dev_header = MK_FP(registers.cs, 0);
 
-    cdprintf("\nSD pport device driver v0.1 (C) 2023 by Paul Devine\n");
-    cdprintf("     based on (C) 2014 by Dan Marks and on TU58 by Robert Armstrong\n");
-    cdprintf("     with help from an openwatcom driver by Eduardo Casino\n");
+    static char hellomsg[] = "\r\nDOS Device Driver Template in Open Watcom C\r\n$";
+
+    printMsg("\r\nSD userport device driver v0.1 (C) 2023-24 by Paul Devine\r\n$");
+    printMsg("based on (C) 2014 by Dan Marks and on TU58 by Robert Armstrong\r\n$");
+    printMsg("with help from an openwatcom driver by Eduardo Casino\r\n$");
 
     if (debug) cdprintf("initializing user port\n");
     
