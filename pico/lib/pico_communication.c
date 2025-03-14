@@ -238,7 +238,7 @@ ResponseStatus receive_command_packet(PIO_state *pio_state, Payload *payload) {
         sendResponseStatus(pio_state, MEMORY_ALLOCATION_ERROR);
         return MEMORY_ALLOCATION_ERROR;
     }
-    if (payload->protocol != LOG_OUTPUT) {
+    if (DEBUG_PACKETS && (payload->protocol != LOG_OUTPUT)) {
         printf("--------------------------\n");
         printf("Protocol: %d, Command: %d\n", payload->protocol, payload->command);
     }

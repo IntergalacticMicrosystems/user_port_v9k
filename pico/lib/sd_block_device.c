@@ -22,6 +22,8 @@
 #include "sd_block_device.h"
 #include "v9k_hard_drives.h"
 
+static const bool DEBUG_SDIO = false;
+
 /* SDIO Interface */
 static sd_sdio_if_t sdio_if = {
     /*
@@ -148,7 +150,7 @@ int read_bpb(FIL *disk_image, uint32_t start_lba, BPB_FAT12 *bpb) {
 
     // Calculate the byte offset to the start of the first partition
     FSIZE_t offset = (FSIZE_t)start_lba * SECTOR_SIZE;
-    printf("Reading MBR at offset %lu\n", offset);
+    if (DEBUG_SDIO) { printf("Reading MBR at offset %lu\n", offset); }
     
     res = f_lseek(disk_image, offset);
     // Seek to the beginning of the first partition
@@ -179,7 +181,7 @@ int read_sector(FIL *img_file, uint32_t partition_start_lba, uint32_t sector_num
 
     // Move the file pointer to the desired sector
     FSIZE_t offset = (FSIZE_t) calculate_mbr_offset(partition_start_lba, sector_number, SECTOR_SIZE);
-    printf("Reading sector %u at offset %lu\n", sector_number, offset);
+    if (DEBUG_SDIO) { printf("Reading sector %u at offset %lu\n", sector_number, offset); }
     res = f_lseek(img_file, offset);
     if (res != FR_OK) {
         printf("f_lseek failed: %d\n", res);
@@ -237,11 +239,13 @@ int read_fat12_bpb_from_img_file(DriveImage *drive_image, VictorBPB *victor_bpb)
         return -1;
     }
 
-    printf("First Partition Details:\n");
-    printf("  Boot Indicator: 0x%X\n", first_partition->boot_indicator);
-    printf("  Partition Type: 0x%X\n", first_partition->partition_type);
-    printf("  Start LBA: %u\n", first_partition->start_lba);
-    printf("  Size in Sectors: %u\n\n", first_partition->size_in_sectors);
+    if (DEBUG_SDIO) {
+        printf("First Partition Details:\n");
+        printf("  Boot Indicator: 0x%X\n", first_partition->boot_indicator);
+        printf("  Partition Type: 0x%X\n", first_partition->partition_type);
+        printf("  Start LBA: %u\n", first_partition->start_lba);
+        printf("  Size in Sectors: %u\n\n", first_partition->size_in_sectors);
+    }
 
     // Read the BPB from the first partition
     if (read_bpb(img_file, first_partition->start_lba, &bpb) != 0) {
@@ -354,7 +358,7 @@ int parse_fat16_bpb(DriveImage *drive_image, VictorBPB *bpb) {
 
      // Get the starting sector of the first partition
     uint32_t partition_start = get_first_partition_start(buffer);
-    printf("First partition starts at sector: %u\n", partition_start);
+    if (DEBUG_SDIO) { printf("First partition starts at sector: %u\n", partition_start); }
 
     // Read the boot sector of the first partition
     if (read_sector(img_file, drive_image->start_lba, partition_start, boot_sector) != 0) {
@@ -498,7 +502,7 @@ SDState* initialize_sd_state(const char *directory) {
         printf("fprintf failed\n");
     }
 
-    printf("Mounted SD card\n");
+    if (DEBUG_SDIO) { printf("Mounted SD card\n"); }
     DIR dir;
     struct dirent *entry;
     sdState->fileCount = 0;
@@ -513,9 +517,9 @@ SDState* initialize_sd_state(const char *directory) {
     FILINFO fno;
     sdState->fileCount = 0;
     while (FR_OK == f_readdir(&dir, &fno) ) {
-        printf("directory entry: %s\n", fno.fname);
+       if (DEBUG_SDIO) { printf("directory entry: %s\n", fno.fname); }
         if (fno.fname[0] == 0 || sdState->fileCount >= MAX_IMG_FILES) {
-            printf("No more files\n");
+            if (DEBUG_SDIO) { printf("No more files\n"); }
             break;
         }
         if (matches_pattern(fno.fname)) {
@@ -536,7 +540,7 @@ SDState* initialize_sd_state(const char *directory) {
         }
     }
     f_closedir(&dir);
-    printf("file list length: %d\n", sdState->fileCount);
+    if (DEBUG_SDIO) { printf("file list length: %d\n", sdState->fileCount); }
 
     // Loop through and print each string
     for (int i = 0; i < sdState->fileCount; ++i) {
@@ -559,9 +563,9 @@ void freeSDState(SDState *sdState) {
 //returns an arraay of BPBs used to initialize the drives
 Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) {
 
-    printf("Found %d matching files:\n", sdState->fileCount);
+    if (DEBUG_SDIO) { printf("Found %d matching files:\n", sdState->fileCount); }
     for (int i = 0; i < sdState->fileCount; i++) {
-        printf("%s\n", sdState->file_names[i]);
+       if (DEBUG_SDIO) { printf("%s\n", sdState->file_names[i]); }
     }
        
     //determine the number of drives I'm instantiating, based on images from SD card
@@ -616,7 +620,7 @@ Payload* init_sd_card(SDState *sdState, PIO_state *pio_state, Payload *payload) 
     }
 
     for (int i = 0; i < num_drives; i++) {
-        printf("BPB for drive %d %c %s\n", i, (i + 'C'), sdState->file_names[i]);
+       if (DEBUG_SDIO) { printf("BPB for drive %d %c %s\n", i, (i + 'C'), sdState->file_names[i]); }
         print_debug_bpb(&initPayload->bpb_array[i]);
     }
     //return the drive information to the Victor 9000
@@ -665,7 +669,7 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     // Calculate the offset in the .img file
     int startSector = readParams->start_sector;
     long offset = calculate_mbr_offset(sdState->images[driveNumber]->start_lba, startSector, SECTOR_SIZE);
-    printf("sd_read startSector: %u, Offset: %ld\n", startSector, offset);
+    if (DEBUG_SDIO) { printf("sd_read startSector: %u, Offset: %ld\n", startSector, offset); }
 
     // Move to the calculated offset
     if (FR_OK != f_lseek(sdState->images[driveNumber]->img_file, offset)) {
@@ -702,13 +706,18 @@ Payload* sd_read(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data_size = (uint16_t) bytesRead;
     response->data = buffer;
     response->status = STATUS_OK;
-    printf("sd_read Read %u bytes\n", bytesRead);
-    printf("sd_read Read %.40s\n", response->data);
-    printf("sd_read Read: ");
-    for (int i = 0; i < 40; i++) {
-        printf(" %x", response->data[i]);
+    
+    if (DEBUG_SDIO) {
+        printf("sd_read Read %u bytes\n", bytesRead);
+        printf("sd_read Read %.40s\n", response->data);
+        printf("sd_read Read: ");
+
+        for (int i = 0; i < 40; i++) {
+            printf(" %x", response->data[i]);
+        }
+        printf("\n");
     }
-    printf("\n");
+
     create_command_crc8(response);
     create_data_crc8(response);
     
@@ -739,7 +748,7 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     // Calculate the offset in the .img file
     int startSector = writeParams->start_sector;
     FSIZE_t offset = (FSIZE_t) calculate_mbr_offset(sdState->images[driveNumber]->start_lba, startSector, SECTOR_SIZE);
-    printf("sd_write startSector: %u, Offset: %ld\n", startSector, offset);
+    if (DEBUG_SDIO) { printf("sd_write startSector: %u, Offset: %ld\n", startSector, offset); }
 
     // Move to the calculated offset
     if (FR_OK != f_lseek(sdState->images[driveNumber]->img_file, offset)) {
@@ -767,13 +776,17 @@ Payload* sd_write(SDState *sdState, PIO_state *pio_state, Payload *payload) {
     response->data = (uint8_t *)malloc(1);
     response->data[0] = 0;
     response->status = STATUS_OK;
-    printf("sd_write Wrote %u bytes\n", bytesWriten);
-    printf("sd_write Wrote %.40s\n", payload->data);
-    printf("sd_write Wrote: ");
-    for (int i = 0; i < 40; i++) {
-        printf(" %x", payload->data[i]);
+
+    if (DEBUG_SDIO) {
+        printf("sd_write Wrote %u bytes\n", bytesWriten);
+        printf("sd_write Wrote %.40s\n", payload->data);
+        printf("sd_write Wrote: ");
+        for (int i = 0; i < 40; i++) {
+            printf(" %x", payload->data[i]);
+        }
+        printf("\n");
     }
-    printf("\n");
+
     create_command_crc8(response);
     create_data_crc8(response);
     
