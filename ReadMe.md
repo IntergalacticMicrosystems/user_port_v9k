@@ -1,3 +1,5 @@
+# IntergalacticMicrosystems NOTE:
+Will be tweaking this to use plain pico board and USB stdio.
 
 # Victor 9000 User Port SD Card Interface
 
