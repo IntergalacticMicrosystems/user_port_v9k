@@ -14,7 +14,7 @@ if (EXISTS ${picoVscode})
 endif()
 # ====================================================================================
 # Generated Cmake Pico project file
-
+ 
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
@@ -23,7 +23,7 @@ SET(APPLE FALSE)
 set(CMAKE_SYSTEM_NAME Linux)
 
 
-set(PICO_BOARD pimoroni_pico_plus2_rp2350 CACHE STRING "Board type")
+set(PICO_BOARD pico CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 

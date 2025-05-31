@@ -52,6 +52,7 @@ void send_to_pio_fifo(PIO pio, uint sm) {
 int main(void) {
     stdio_init_all();
 
+    /*
     uart_init(UART_ID, 115200);  // You can adjust the baud rate here
     gpio_set_function(UART_TX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_TX_PIN));
     gpio_set_function(UART_RX_PIN, UART_FUNCSEL_NUM(UART_ID, UART_RX_PIN));
@@ -59,16 +60,19 @@ int main(void) {
     // // Redirect stdout to UART
     uart_set_hw_flow(UART_ID, false, false);
     uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
-
+    */
     puts("User Port Pico Initializing...");
+
     // Initialize PIO
     PIO_state *pio_state = init_pio();
 
     //Initialize the SD Card
     const char *directory = "";
     SDState *sd_state = initialize_sd_state(directory);
+    puts("  SD Card initialized.");
 
     wait_for_startup_handshake(pio_state);
+    puts("  Victor startup handshake.");
     process_incoming_commands(sd_state, pio_state);
 
     return 0;
